@@ -1,0 +1,29 @@
+# Local development scripts
+commit.sh
+
+# QQ data directory (user's session data)
+.knock/
+
+# Babashka/Clojure
+.cpcache/
+.nrepl-port
+.rebel_readline_history
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

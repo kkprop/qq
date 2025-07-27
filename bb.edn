@@ -1,0 +1,27 @@
+{:paths ["src"]
+ :deps {org.clojure/data.json {:mvn/version "2.4.0"}
+        babashka/process {:mvn/version "0.5.21"}}
+ 
+ :tasks
+ {;; Development tasks
+  repl {:doc "Start development REPL"
+        :task (clojure "-M:repl")}
+  
+  test {:doc "Run tests"
+        :task (shell "bb -m qq.test")}
+  
+  ;; Main QQ commands
+  create {:doc "Create a new Q session with context"
+          :task (shell "bb -m qq.core" "create" (first *command-line-args*))}
+  
+  ask {:doc "Ask a question to current or specified session"
+       :task (apply shell "bb -m qq.core" "ask" *command-line-args*)}
+  
+  list {:doc "List all Q sessions with context summaries"
+        :task (shell "bb -m qq.core" "list")}
+  
+  attach {:doc "Get tmux attach command for a session"
+          :task (shell "bb -m qq.core" "attach" (first *command-line-args*))}
+  
+  switch {:doc "Switch current session"
+          :task (shell "bb -m qq.core" "switch" (first *command-line-args*))}}}
