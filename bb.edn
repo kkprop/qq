@@ -4,8 +4,8 @@
  
  :tasks
  {;; Development tasks
-  repl {:doc "Start development REPL"
-        :task (clojure "-M:repl")}
+  dev-repl {:doc "Start development REPL"
+            :task (clojure "-M:repl")}
   
   test {:doc "Run tests"
         :task (shell "bb -m qq.test")}
