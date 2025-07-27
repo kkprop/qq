@@ -6,8 +6,7 @@
             [babashka.process :as p]
             [qq.session :as session]
             [qq.tmux :as tmux]
-            [qq.naming :as naming]
-            [qq.context :as context]))
+            [qq.naming :as naming]))
 
 ;; Configuration
 (def ^:private MAX-SESSIONS 21)
@@ -32,17 +31,26 @@
                       :message-count 0}]
     
     ;; Create tmux session
-    (tmux/create-session session-id)
-    
-    ;; Generate terse name using naming service
-    (let [terse-name (naming/generate-name context)]
-      (let [updated-session (assoc session-data :name terse-name)]
-        ;; Save session metadata
-        (session/save updated-session)
-        ;; Set as current session
-        (reset! current-session session-id)
-        ;; Return session info
-        {:session-id session-id :name terse-name}))))
+    (println "🚀 Creating tmux session...")
+    (let [tmux-result (tmux/create-session session-id)]
+      (if (:success tmux-result)
+        (do
+          (println "✅ Tmux session created")
+          ;; Generate terse name using naming service
+          (println "🏷️  Generating session name...")
+          (let [terse-name (naming/generate-name context)]
+            (println (str "✅ Generated name: " terse-name))
+            (let [updated-session (assoc session-data :name terse-name)]
+              ;; Save session metadata
+              (session/save updated-session)
+              ;; Set as current session
+              (reset! current-session session-id)
+              ;; Return session info
+              (println (str "🎉 Session created successfully!"))
+              {:session-id session-id :name terse-name})))
+        (do
+          (println "❌ Failed to create tmux session")
+          {:error "Failed to create tmux session"})))))
 
 (defn ask
   "Ask a question to current or specified session (sync)"

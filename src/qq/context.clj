@@ -34,6 +34,26 @@
       (catch Exception e
         (println "Warning: Could not save context for session" session-id ":" (.getMessage e))))))
 
+(defn- extract-themes [summary-text]
+  "Extract key themes from summary text"
+  (try
+    ;; Look for "Key Themes:" section and extract themes
+    (let [lines (str/split-lines summary-text)
+          themes-line (first (filter #(str/includes? (str/lower-case %) "key themes") lines))]
+      (if themes-line
+        ;; Extract themes from the line
+        (let [themes-part (str/replace themes-line #"(?i).*key themes:?\s*" "")
+              themes (-> themes-part
+                        (str/split #"[,\n]")
+                        (->> (map str/trim)
+                             (remove str/blank?)
+                             (take 5)))]  ; Limit to 5 themes
+          themes)
+        []))
+    (catch Exception e
+      (println "Warning: Could not extract themes:" (.getMessage e))
+      [])))
+
 (defn summarize-session [session-id]
   "Generate context summary for a session using its own Q window"
   (try
@@ -74,26 +94,6 @@
     (catch Exception e
       (println "Error generating context summary:" (.getMessage e))
       {:summary "Error generating summary" :last-updated (System/currentTimeMillis) :themes []})))
-
-(defn- extract-themes [summary-text]
-  "Extract key themes from summary text"
-  (try
-    ;; Look for "Key Themes:" section and extract themes
-    (let [lines (str/split-lines summary-text)
-          themes-line (first (filter #(str/includes? (str/lower-case %) "key themes") lines))]
-      (if themes-line
-        ;; Extract themes from the line
-        (let [themes-part (str/replace themes-line #"(?i).*key themes:?\s*" "")
-              themes (-> themes-part
-                        (str/split #"[,\n]")
-                        (->> (map str/trim)
-                             (remove str/blank?)
-                             (take 5)))]  ; Limit to 5 themes
-          themes)
-        []))
-    (catch Exception e
-      (println "Warning: Could not extract themes:" (.getMessage e))
-      [])))
 
 (defn get-session-context [session-id]
   "Get current context summary for a session"
