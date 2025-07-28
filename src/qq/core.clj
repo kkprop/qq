@@ -58,7 +58,7 @@
       (session/ensure-default-session)))
 
 (defn ask
-  "Ask a question to current or specified session (sync)"
+  "Ask a question to current or specified session (sync with streaming display)"
   ([question]
    (let [session-id (get-active-session)]
      (ask session-id question)))
@@ -77,13 +77,32 @@
          
          ;; Update last activity
          (session/update-activity session-id)
-         ;; Send question to tmux session and get response (timeline logging happens in tmux)
-         (let [response (tmux/send-and-wait session-id question)]
-           ;; Update default session context if this was the default session
+         
+         ;; Use ask! for streaming but wait for completion
+         (println "🚀 Question sent with streaming display...")
+         (println "📡 Q response generating in session (watch with: tmux attach -t qq-default)")
+         (println "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+         
+         ;; Start async processing and wait for completion (no progress callback needed)
+         (let [result-promise (tmux/send-async session-id question)
+               result @result-promise]  ; Wait for completion
+           
+           (println)
+           (println "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
            (when (= session-id "default")
              (session/update-default-context))
-           response))
-       (println (str "❌ Session not found: " session-name-or-id))))))
+           
+           (if (:success result)
+             (do
+               (println (:response result))  ; Print the actual response
+               (println "✅ Response complete!")
+               (:response result))
+             (do
+               (println (str "❌ Error: " (:error result)))
+               nil))))
+       (do
+         (println (str "❌ Session not found: " session-name-or-id))
+         nil)))))
 
 (defn ask!
   "Ask a question asynchronously with streaming progress (returns immediately)"

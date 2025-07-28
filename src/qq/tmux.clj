@@ -135,6 +135,30 @@
 
 ;; Enhanced Async Output with Progress Updates
 
+(defn- extract-current-response [current-output question]
+  "Extract just the response to the current question from tmux output"
+  (let [lines (str/split-lines current-output)
+        ;; Find the line with our question
+        question-idx (first (keep-indexed 
+                            (fn [idx line] 
+                              (when (str/includes? line question) idx)) 
+                            lines))]
+    (if question-idx
+      ;; Get lines after the question until we hit a standalone ">" at the end
+      (let [after-question (drop (inc question-idx) lines)
+            ;; Take all lines until we find a line that is just ">" (the final prompt)
+            response-lines (loop [remaining after-question
+                                 collected []]
+                            (if (empty? remaining)
+                              collected
+                              (let [line (first remaining)]
+                                (if (= (str/trim line) ">")
+                                  collected  ; Stop when we hit the final prompt
+                                  (recur (rest remaining) (conj collected line))))))]
+        (str/trim (str/join "\n" response-lines)))
+      ;; Fallback: return empty if we can't find the question
+      "")))
+
 (defn send-with-progress [session-id question progress-callback]
   "Send question with progress updates using improved polling"
   (let [tmux-name (session-name session-id)
@@ -163,15 +187,23 @@
                  (not= current-output last-output))
             (do
               (progress-callback new-content current-output)
-              ;; Check if response seems complete
-              (if (or (str/includes? current-output "\n> ")
-                      (str/includes? current-output "➜")
-                      (str/includes? current-output "$")
-                      (> (- (System/currentTimeMillis) start-time) 30000))  ; 30 second max
+              ;; Check if response seems complete - look for actual response end patterns
+              (if (and (str/includes? current-output "\n>")
+                       ;; And no loading indicators
+                       (not (str/includes? current-output "⠼ Thinking..."))
+                       (not (str/includes? current-output "⠋"))
+                       (not (str/includes? current-output "⠙"))
+                       (not (str/includes? current-output "⠹"))
+                       (not (str/includes? current-output "⠸"))
+                       (not (str/includes? current-output "⠼"))
+                       (not (str/includes? current-output "⠴"))
+                       (not (str/includes? current-output "⠦"))
+                       (not (str/includes? current-output "⠧"))
+                       (not (str/includes? current-output "⠇"))
+                       (not (str/includes? current-output "⠏")))
+                ;; Extract just the current response
                 (let [response-time (- (System/currentTimeMillis) start-time)
-                      final-response (if (str/includes? current-output initial-output)
-                                      (str/replace-first current-output initial-output "")
-                                      current-output)]
+                      final-response (extract-current-response current-output question)]
                   (timeline/log-answer session-id final-response response-time)
                   final-response)
                 (recur (inc attempts) max-attempts current-output)))
@@ -193,8 +225,8 @@
   (let [promise (promise)]
     (future
       (try
-        ;; Use send-and-wait which already handles timeline logging
-        (let [response (send-and-wait session-id question)]
+        ;; Use send-with-progress with no-op callback for better completion detection
+        (let [response (send-with-progress session-id question (fn [_ _]))]
           (deliver promise {:success true :response response}))
         (catch Exception e
           (println (str "❌ Error in async question: " (.getMessage e)))
