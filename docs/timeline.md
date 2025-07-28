@@ -213,9 +213,41 @@ Each entry follows this structure:
 }
 ```
 
+### 2025-07-27 13:15 - [IMPL] Phase 1.3 - Question/Answer System with Sync/Async Support Complete
+**Context**: Need both synchronous and asynchronous Q&A capabilities with clear user feedback and timeline integration
+**Decision**: Implement ask! function with ! suffix convention, promise-based async, and enhanced user experience
+**Impact**: Complete Q&A system supporting both sync and async workflows with timeline logging
+**Commit**: `d3d1f71` - Implement Phase 1.3 - Question/Answer System with Sync/Async Support
+**Files**: 
+- `src/qq/core.clj` - ask! function, CLI handling, enhanced promises
+- `src/qq/tmux.clj` - Enhanced async error handling
+- `bb.edn` - ask! task integration
+
+**Implementation Results**:
+- ✅ ask! async function with promise-based architecture
+- ✅ Progress messages: "🚀 Question sent asynchronously..." and "⏳ Waiting for response..."
+- ✅ Timeline integration for both sync and async interactions
+- ✅ Message count updates correctly (8→12 msgs in testing)
+- ✅ CLI integration with bb ask! task and help documentation
+- ✅ Error handling with {:success true/false :response/:error} structure
+- ✅ Legacy ask-async alias maintained for backward compatibility
+
+**Technical Architecture**:
+- **Promise-based async**: Leverages Clojure futures and enhanced promises
+- **Timeline integration**: Both sync/async logged automatically
+- **Context updates**: Default session context updated after async completion
+- **Error propagation**: Seamless error handling from tmux to CLI layer
+- **User feedback**: Clear progress messages and immediate response
+
+**Testing Validation**:
+- Sync `bb ask` works normally, waits for response
+- Async `bb ask!` shows progress, returns immediately, displays result
+- Timeline logging captures both interaction types
+- Help system documents both commands
+
 ---
 
-## Current Status (2025-07-27 13:00)
+## Current Status (2025-07-27 13:15)
 
 **Architecture State**: MVP validated, core components working
 **Next Priority**: Default window implementation
