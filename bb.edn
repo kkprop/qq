@@ -17,11 +17,8 @@
   ask {:doc "Ask a question to current or specified session"
        :task (apply shell "bb -m qq.core" "ask" *command-line-args*)}
   
-  ask! {:doc "Ask question asynchronously (returns immediately)"
+  ask! {:doc "Ask question asynchronously (returns immediately, streams output)"
         :task (apply shell "bb -m qq.core" "ask!" *command-line-args*)}
-  
-  ask-stream! {:doc "Ask question with streaming output (shows progress as Q responds)"
-               :task (apply shell "bb -m qq.core" "ask-stream!" *command-line-args*)}
   
   list {:doc "List all Q sessions with context summaries"
         :task (shell "bb -m qq.core" "list")}
