@@ -3,7 +3,8 @@
   (:require [clojure.string :as str]
             [babashka.process :as p]
             [clojure.java.io :as io]
-            [qq.timeline :as timeline]))
+            [qq.timeline :as timeline]
+            [qq.approval :as approval]))  ; Add intelligent approval system
 
 ;; Configuration
 (def ^:private QQ-DIR (str (System/getProperty "user.home") "/.knock/qq"))
@@ -211,25 +212,28 @@
         (str/trim (str/join "\n" complete-response)))
       "")))
 
-(def auto-responses
-  "Auto-responses for common Q permission requests"
-  {"Allow this action? Use 't' to trust (always allow) this tool for the session. [y/n/t]:" "y"
-   "Allow this action? [y/n]:" "y"
-   "Continue with this operation? [y/n]:" "y"
-   "Proceed? [y/n]:" "y"})
+;; Intelligent approval system replaces simple auto-responses
+;; See qq.approval namespace for safety analysis and approval logic
 
 (defn- handle-auto-response [session-id output last-output]
-  "Handle automatic responses to Q's permission requests (only if new)"
+  "Handle automatic responses to Q's permission requests with intelligent safety analysis"
   (when (not= output last-output)  ; Only check if output changed
     (let [lines (str/split-lines output)
-          last-few-lines (take-last 3 lines)]
-      (doseq [line last-few-lines]  ; Only check recent lines
-        (doseq [[pattern response] auto-responses]
-          (when (and (str/includes? line pattern)
-                     (not (str/includes? (or last-output "") pattern)))  ; Not in previous output
-            (println (str "🤖 Auto-responding to Q permission: " response))
-            (send-keys session-id response)
-            (Thread/sleep 1000))))))  ; Longer delay
+          last-few-lines (take-last 10 lines)]  ; Check more lines for context
+      (doseq [line last-few-lines]
+        (when (and (str/includes? line "Allow this action?")
+                   (not (str/includes? (or last-output "") line)))  ; Not in previous output
+          ;; Use intelligent approval system
+          (let [context-lines (str/join "\n" (take-last 15 lines))  ; More context for analysis
+                approval-response (approval/get-approval-response context-lines)]
+            (if approval-response
+              (do
+                (println (str "🤖 Auto-responding with safety analysis: " approval-response))
+                (send-keys session-id approval-response)
+                (Thread/sleep 1000))
+              (do
+                (println "🔒 Manual approval required - pausing auto-response")
+                (println "📋 To continue manually: tmux attach -t qq-default"))))))))
 
 (defn send-and-wait-advanced [session-id question]
   "Advanced Q conversation handler for multi-round responses with tool usage"
