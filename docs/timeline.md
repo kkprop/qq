@@ -367,9 +367,41 @@ Each entry follows this structure:
 - Timeline integration for all interaction types (sync, async, streaming)
 - Comprehensive error handling and graceful fallbacks
 
+### 2025-07-27 14:15 - [BUGFIX] ask! vs ask-stream! Redundancy Bug Fix
+**Context**: Both ask! and ask-stream! were essentially identical, both waited for completion despite ask! claiming to "return immediately"
+**Decision**: Remove redundant ask-stream! and fix ask! to truly return immediately with background streaming
+**Impact**: Clear distinction between sync (ask) and async (ask!) commands with proper immediate return behavior
+**Commit**: `4463778` - Fix ask! vs ask-stream! redundancy bug - Phase 2.3 refinement
+**Files**: 
+- `src/qq/core.clj` - Removed ask-stream!, fixed ask! to return immediately with background streaming
+- `bb.edn` - Removed ask-stream! task, updated ask! description
+
+**Problem Analysis**:
+- ask! claimed to "return immediately" but actually waited with `@result-promise`
+- ask-stream! and ask! had identical behavior (both waited for completion)
+- Confusing user experience with redundant commands
+- CLI behavior was misleading about async functionality
+
+**Solution Results**:
+- ✅ Removed redundant ask-stream! function and all references
+- ✅ Fixed ask! to truly return immediately without waiting
+- ✅ Enhanced ask! with background streaming and visual feedback
+- ✅ Updated CLI to return to prompt immediately after sending
+- ✅ Cleaned up documentation and help text
+
+**New Command Behavior**:
+- `bb ask "question"` → Waits for complete response (synchronous)
+- `bb ask! "question"` → Returns immediately, streams in background (asynchronous)
+
+**Testing Validation**:
+- ask! returns immediately: Shows prompt right after sending ✅
+- Background streaming: Question processing continues in background ✅
+- Visual feedback: Clear async processing status messages ✅
+- No redundancy: Single async command with proper behavior ✅
+
 ---
 
-## Current Status (2025-07-27 14:00)
+## Current Status (2025-07-27 14:15)
 
 **Architecture State**: MVP validated, core components working
 **Next Priority**: Default window implementation
