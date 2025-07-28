@@ -46,28 +46,48 @@ Ready to generate names.")
     ;; Send context to naming service
     (let [prompt (str "Generate a terse name for this session context: " context)]
       (let [response (tmux/send-and-wait NAMING-SESSION-ID prompt)]
-        ;; Extract the name from response (should be just the name)
-        (let [lines (str/split-lines (str/trim response))
-              ;; Get the last non-empty line (the generated name)
-              name-line (->> lines
-                            (remove str/blank?)
-                            last
-                            str/trim)]
+        ;; Extract the name from response - look for the generated name line
+        ;; First, join all lines and look for patterns after our prompt
+        (let [full-text (str/join " " (str/split-lines (str/trim response)))
+              ;; Look for the pattern: "> some-name-with-hyphens" after our prompt
+              name-pattern (re-find (re-pattern (str "Generate a terse name for this session context: " 
+                                                    (java.util.regex.Pattern/quote context) 
+                                                    ".*?> ([a-z0-9\\-]+)")) full-text)
+              extracted-name (when name-pattern (second name-pattern))]
           
-          ;; Validate and clean the name
-          (if (and name-line 
-                   (not (str/blank? name-line))
-                   (< (count (str/split name-line #"\s+")) 11))  ; Max 10 words
-            ;; Clean the name: lowercase, replace spaces with hyphens, remove special chars
-            (-> name-line
+          (if (and extracted-name 
+                   (not (str/blank? extracted-name))
+                   (str/includes? extracted-name "-")  ; Must contain hyphens
+                   (< (count (str/split extracted-name #"-")) 11))  ; Max 10 words
+            ;; Clean the name: ensure lowercase, collapse multiple hyphens, remove leading/trailing hyphens
+            (-> extracted-name
                 str/lower-case
-                (str/replace #"\s+" "-")
-                (str/replace #"[^a-z0-9\-]" "")
                 (str/replace #"-+" "-")  ; Collapse multiple hyphens
                 (str/replace #"^-|-$" ""))  ; Remove leading/trailing hyphens
             
-            ;; Fallback name if generation failed
-            (str "session-" (System/currentTimeMillis))))))
+            ;; Fallback: try simpler approach - look for any hyphenated word after ">"
+            (let [lines (str/split-lines (str/trim response))
+                  ;; Find lines that start with ">" and contain hyphens
+                  response-lines (->> lines
+                                     (filter #(str/starts-with? (str/trim %) ">"))
+                                     (map #(str/replace % #"^>\s*" ""))  ; Remove "> " prefix
+                                     (map str/trim)
+                                     (filter #(and (> (count %) 5)
+                                                  (str/includes? % "-")
+                                                  (re-matches #"[a-z0-9\-]+" %))))
+                  fallback-name (last response-lines)]
+              
+              (if (and fallback-name (not (str/blank? fallback-name)))
+                (-> fallback-name
+                    str/lower-case
+                    (str/replace #"-+" "-")
+                    (str/replace #"^-|-$" ""))
+                
+                ;; Final fallback
+                (do
+                  (println "Warning: Could not extract valid name from naming service response")
+                  (println "Full response text:" (pr-str (take 200 full-text)))
+                  (str "session-" (System/currentTimeMillis)))))))))
     
     (catch Exception e
       (println "Warning: Naming service failed, using fallback name:" (.getMessage e))
