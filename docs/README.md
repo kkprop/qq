@@ -7,6 +7,7 @@ Welcome to the QQ documentation! This directory contains detailed design documen
 ### **Design Documents**
 - **[Default Window Design](default-window-design.md)** - Design for immediate Q access without session creation
 - **[Architecture](architecture.md)** - Complete system architecture and component overview
+- **[Action Plan](action-plan.md)** - 6-week implementation roadmap with priorities and timelines
 
 ### **Development**
 - **[Development Log](development-log.md)** - Progress tracking, decisions, and technical insights
@@ -39,6 +40,7 @@ Welcome to the QQ documentation! This directory contains detailed design documen
 | [Development Log](development-log.md) | 🔄 Living | 2025-07-27 | Progress tracking |
 | [Timeline](timeline.md) | 🔄 Living | 2025-07-27 | Chronological development record |
 | [Logging Workflow](logging-workflow.md) | ✅ Complete | 2025-07-27 | Timeline maintenance process |
+| [Action Plan](action-plan.md) | ✅ Complete | 2025-07-27 | 6-week implementation roadmap |
 
 ## 🔄 Keeping Documentation Updated
 
