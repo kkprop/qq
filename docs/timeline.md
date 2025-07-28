@@ -132,7 +132,7 @@ Each entry follows this structure:
 **Context**: Need systematic way to track architecture evolution and decisions
 **Decision**: Structured timeline logging with types, context, and impact tracking
 **Impact**: Clear development history, decision rationale preservation
-**Commit**: TBD
+**Commit**: `d823fe6` - Implement timeline tracking system for architecture and implementation history
 **Files**: 
 - `docs/timeline.md` - This timeline system
 - `docs/logging-workflow.md` - Process for maintaining timeline
@@ -141,7 +141,7 @@ Each entry follows this structure:
 **Context**: Timeline system needs clear process for continuous maintenance
 **Decision**: Create structured workflow with templates, guidelines, and integration points
 **Impact**: Ensures timeline remains valuable and consistently maintained
-**Commit**: TBD
+**Commit**: `d823fe6` - Implement timeline tracking system for architecture and implementation history
 **Files**: 
 - `docs/logging-workflow.md` - Complete workflow documentation
 - `docs/README.md` - Updated to include timeline docs
