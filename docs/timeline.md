@@ -399,9 +399,60 @@ Each entry follows this structure:
 - Visual feedback: Clear async processing status messages ✅
 - No redundancy: Single async command with proper behavior ✅
 
+### 2025-07-27 15:30 - [BREAKTHROUGH] Q Timeline Analysis and Proper Response Parsing Architecture
+**Context**: Fundamental response extraction issues due to lack of understanding of Q's actual timeline structure
+**Decision**: Conduct systematic analysis of Q session timeline to understand real response patterns
+**Impact**: Complete resolution of response extraction issues through proper architectural understanding
+**Commit**: `e3a5c94` - Major architectural improvement: Q timeline analysis and proper response parsing
+**Files**: 
+- `src/qq/tmux.clj` - Added extract-latest-response(), send-and-wait-improved(), updated send-async()
+
+**Problem Analysis**:
+- Previous approach based on incorrect assumptions about Q's response structure
+- Looking for non-existent loading indicators (⠼ Thinking...)
+- Complex polling logic solving the wrong problem
+- Response extraction failing due to timeline format misunderstanding
+
+**Q Timeline Structure Discovery**:
+Through systematic analysis of actual Q sessions, discovered the real pattern:
+```
+> [USER QUESTION]
+
+> [Q RESPONSE CONTENT - COMPLETE RESPONSE HERE]
+
+>  ← Standalone > marks response end
+```
+
+**Key Insights Gained**:
+- Q responds immediately (no loading indicators in CLI interface)
+- Simple linear timeline: Question → Response → Standalone >
+- Response boundaries clearly marked by standalone > on its own line
+- No complex polling needed - Q behavior is predictable and consistent
+
+**Technical Implementation**:
+- `extract-latest-response()`: Proper response boundary detection using actual Q patterns
+- `send-and-wait-improved()`: Based on real Q behavior, not assumptions
+- Updated `send-async()`: Uses improved timeline understanding
+- Simplified completion detection: checks for `\\n>\\n` at end of output
+- Removed complex spinner detection and fake progress indicators
+
+**Testing Validation**:
+- ✅ Complete responses: Full Rust programming language explanation with all sections
+- ✅ Clean extraction: No mixing with previous Python/JavaScript Q&A content
+- ✅ Proper boundaries: Response extracted from question to final >
+- ✅ Accurate completion: Detects when Q actually finishes responding
+- ✅ One question, one answer pattern: Fully supported and reliable
+
+**Architecture Transformation**:
+- **FROM**: Complex polling with fake progress indicators and broken string manipulation
+- **TO**: Simple, reliable parsing based on actual Q timeline structure
+
+**Breakthrough Significance**:
+This represents a fundamental shift from guessing Q's behavior to understanding it through systematic analysis. The response extraction now works correctly because it's based on Q's actual response patterns rather than assumptions. This architectural improvement resolves all previous response extraction issues and provides a solid foundation for future enhancements.
+
 ---
 
-## Current Status (2025-07-27 14:15)
+## Current Status (2025-07-27 15:30)
 
 **Architecture State**: MVP validated, core components working
 **Next Priority**: Default window implementation
