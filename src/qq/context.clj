@@ -65,18 +65,19 @@
         (println "⚠️  No conversation content to summarize")
         
         ;; Use the session's own Q window to generate summary
-        (let [summary-prompt (str "Please provide a brief summary of our conversation so far. 
-                                 Focus on:
-                                 1. Main topics discussed (2-3 key themes)
-                                 2. Current context/focus area
-                                 3. Any ongoing tasks or questions
-                                 
-                                 Keep it concise (under 200 words) and structured.
-                                 
-                                 Format as:
-                                 **Summary:** [brief overview]
-                                 **Key Themes:** [theme1, theme2, theme3]
-                                 **Current Focus:** [what we're working on now]")
+        (let [summary-prompt "Please provide a brief summary of our conversation so far. 
+
+Focus on:
+1. Main topics discussed (2-3 key themes)
+2. Current context/focus area
+3. Any ongoing tasks or questions
+
+Keep it concise (under 200 words) and structured.
+
+Format as:
+**Summary:** [brief overview]
+**Key Themes:** [theme1, theme2, theme3]
+**Current Focus:** [what we're working on now]"
               
               response (tmux/send-and-wait session-id summary-prompt)]
           
