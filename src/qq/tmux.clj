@@ -478,6 +478,24 @@
       (catch Exception e
         false))))
 
+;; Intelligent approval system for Q tool usage
+(defn- handle-intelligent-approval [session-id output]
+  "Handle Q permission requests with intelligent safety analysis"
+  (when (str/includes? output "Allow this action?")
+    (let [lines (str/split-lines output)
+          context-lines (str/join "\n" (take-last 15 lines))
+          approval-response (approval/get-approval-response context-lines)]
+      (if approval-response
+        (do
+          (println (str "🤖 Auto-responding with safety analysis: " approval-response))
+          (send-keys session-id approval-response)
+          (Thread/sleep 1000)
+          true)  ; Return true to indicate we handled it
+        (do
+          (println "🔒 Manual approval required - pausing auto-response")
+          (println "📋 To continue manually: tmux attach -t qq-default")
+          false)))))  ; Return false to indicate manual intervention needed
+
 (defn kill-session [session-id]
   "Kill tmux session"
   (let [tmux-name (session-name session-id)]
