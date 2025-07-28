@@ -77,8 +77,12 @@
          
          ;; Update last activity
          (session/update-activity session-id)
-         ;; Send question to tmux session and get response
-         (tmux/send-and-wait session-id question))
+         ;; Send question to tmux session and get response (timeline logging happens in tmux)
+         (let [response (tmux/send-and-wait session-id question)]
+           ;; Update default session context if this was the default session
+           (when (= session-id "default")
+             (session/update-default-context))
+           response))
        (println (str "❌ Session not found: " session-name-or-id))))))
 
 (defn ask-async

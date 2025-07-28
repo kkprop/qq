@@ -2,7 +2,8 @@
   "Tmux integration with incremental output caching"
   (:require [clojure.string :as str]
             [babashka.process :as p]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [qq.timeline :as timeline]))
 
 ;; Configuration
 (def ^:private QQ-DIR (str (System/getProperty "user.home") "/.knock/qq"))
@@ -80,8 +81,12 @@
   (Thread/sleep 1000))
 
 (defn send-and-wait [session-id question]
-  "Send question and wait for response (synchronous)"
-  (let [tmux-name (session-name session-id)]
+  "Send question and wait for response (synchronous) with timeline logging"
+  (let [tmux-name (session-name session-id)
+        start-time (System/currentTimeMillis)]
+    ;; Log the question to timeline
+    (timeline/log-question session-id question)
+    
     ;; Capture initial state
     (let [initial-output (capture-output session-id)]
       ;; Send question
@@ -100,34 +105,41 @@
             ;; Got new content
             (and (not (str/blank? new-content))
                  (not= new-content initial-output))
-            (do
-              ;; Check for errors and auto-recover
-              (when (detect-error-output new-content)
-                (auto-continue-on-error session-id)
-                ;; Wait for recovery and get new output
-                (Thread/sleep 3000)
-                (let [recovered-output (capture-output session-id)]
-                  (if (detect-error-output recovered-output)
-                    new-content  ; Return error if recovery failed
-                    recovered-output)))  ; Return recovered output
-              new-content)
+            (let [response-time (- (System/currentTimeMillis) start-time)
+                  final-response (if (detect-error-output new-content)
+                                  (do
+                                    (auto-continue-on-error session-id)
+                                    ;; Wait for recovery and get new output
+                                    (Thread/sleep 3000)
+                                    (let [recovered-output (capture-output session-id)]
+                                      (if (detect-error-output recovered-output)
+                                        new-content  ; Return error if recovery failed
+                                        recovered-output)))  ; Return recovered output
+                                  new-content)]
+              ;; Log the answer to timeline
+              (timeline/log-answer session-id final-response response-time)
+              final-response)
             
             ;; Timeout
             (>= attempts max-attempts)
-            (do
+            (let [timeout-response "⏰ Timeout: No response from Amazon Q"
+                  response-time (- (System/currentTimeMillis) start-time)]
               (println "⏰ Timeout waiting for Q response")
-              "⏰ Timeout: No response from Amazon Q")
+              ;; Log timeout as answer
+              (timeline/log-answer session-id timeout-response response-time)
+              timeout-response)
             
             ;; Continue waiting
             :else
             (recur (inc attempts) max-attempts)))))))
 
 (defn send-async [session-id question]
-  "Send question asynchronously, returns a promise"
+  "Send question asynchronously with timeline logging, returns a promise"
   (let [promise (promise)]
     (future
       (try
         (let [response (send-and-wait session-id question)]
+          ;; Timeline logging is handled in send-and-wait
           (deliver promise {:success true :response response}))
         (catch Exception e
           (deliver promise {:success false :error (.getMessage e)}))))

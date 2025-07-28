@@ -2,7 +2,8 @@
   "Session management and storage"
   (:require [clojure.string :as str]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [qq.timeline :as timeline]))
 
 ;; Configuration
 (def ^:private QQ-DIR (str (System/getProperty "user.home") "/.knock/qq"))
@@ -80,9 +81,10 @@
       ;; Default session exists, return its ID
       default-session-id
       ;; Create new default session
-      (let [default-session {:id default-session-id
+      (let [timeline-context (timeline/get-timeline-context default-session-id)
+            default-session {:id default-session-id
                             :name "default"
-                            :context "General Amazon Q assistance - Timeline summary will be generated from interactions"
+                            :context timeline-context
                             :created-at (System/currentTimeMillis)
                             :last-activity (System/currentTimeMillis)
                             :message-count 0
@@ -136,6 +138,14 @@
             (doseq [[i session] (map-indexed vector fuzzy-matches)]
               (println (str "  " (inc i) ". " (:name session))))
             nil))))))
+
+(defn update-default-context []
+  "Update default session context based on timeline"
+  (when-let [default-session (load "default")]
+    (let [timeline-context (timeline/get-timeline-context "default")
+          updated-session (assoc default-session :context timeline-context)]
+      (save updated-session)
+      timeline-context)))
 
 (defn update-activity [session-id]
   "Update last activity timestamp for session"
