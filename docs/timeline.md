@@ -245,9 +245,42 @@ Each entry follows this structure:
 - Timeline logging captures both interaction types
 - Help system documents both commands
 
+### 2025-07-27 13:30 - [IMPL] Phase 2.1 - Naming Service Debug and Fix Complete
+**Context**: Naming service was failing to generate descriptive session names, falling back to UUIDs due to parsing issues
+**Decision**: Debug and fix the response parsing logic to handle complex Q responses with UI elements and line breaks
+**Impact**: Naming service now generates proper descriptive names consistently, eliminating UUID fallbacks
+**Commit**: `733bf8e` - Implement Phase 2.1 - Naming Service Debug and Fix
+**Files**: 
+- `src/qq/naming.clj` - Fixed generate-name() parsing logic with enhanced regex and fallback strategies
+
+**Root Cause Analysis**:
+- Q responses included UI elements (ASCII art, prompts, help text)
+- Generated names were split across lines due to terminal wrapping
+- Original parsing logic was too strict and missed valid names
+- Example: `react-application-performance-opt\nimization` split across lines
+
+**Implementation Results**:
+- ✅ Enhanced regex pattern matching for context-response pairs
+- ✅ Multi-strategy parsing with primary regex + fallback line analysis
+- ✅ Improved filtering to handle Q UI elements and prompts
+- ✅ Better error handling with detailed debug output
+- ✅ Name validation and cleaning (lowercase, hyphen normalization)
+
+**Testing Validation**:
+- Direct naming calls: `spring-boot-microservices-building` ✅
+- Session creation: `graphql-apis-nodejs-implementation` ✅
+- Session listing: Properly named sessions with full context ✅
+- No more UUID fallbacks: Consistent descriptive name generation ✅
+
+**User Experience Impact**:
+- Session names are now meaningful and descriptive
+- Clear progress messages during name generation
+- Proper session organization with readable identifiers
+- Eliminated cryptic UUID session names
+
 ---
 
-## Current Status (2025-07-27 13:15)
+## Current Status (2025-07-27 13:30)
 
 **Architecture State**: MVP validated, core components working
 **Next Priority**: Default window implementation
