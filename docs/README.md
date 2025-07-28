@@ -10,6 +10,8 @@ Welcome to the QQ documentation! This directory contains detailed design documen
 
 ### **Development**
 - **[Development Log](development-log.md)** - Progress tracking, decisions, and technical insights
+- **[Timeline](timeline.md)** - Chronological record of architecture and implementation changes
+- **[Logging Workflow](logging-workflow.md)** - Process for maintaining development timeline
 
 ## 🚀 Quick Navigation
 
@@ -35,6 +37,8 @@ Welcome to the QQ documentation! This directory contains detailed design documen
 | [Default Window Design](default-window-design.md) | 🚧 Draft | 2025-07-27 | Next feature design |
 | [Architecture](architecture.md) | ✅ Complete | 2025-07-27 | System overview |
 | [Development Log](development-log.md) | 🔄 Living | 2025-07-27 | Progress tracking |
+| [Timeline](timeline.md) | 🔄 Living | 2025-07-27 | Chronological development record |
+| [Logging Workflow](logging-workflow.md) | ✅ Complete | 2025-07-27 | Timeline maintenance process |
 
 ## 🔄 Keeping Documentation Updated
 
