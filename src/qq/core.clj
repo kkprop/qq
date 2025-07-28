@@ -52,14 +52,29 @@
           (println "❌ Failed to create tmux session")
           {:error "Failed to create tmux session"})))))
 
+(defn get-active-session []
+  "Get the session to use for commands - current session or default"
+  (or @current-session
+      (session/ensure-default-session)))
+
 (defn ask
   "Ask a question to current or specified session (sync)"
   ([question]
-   (ask @current-session question))
+   (let [session-id (get-active-session)]
+     (ask session-id question)))
   ([session-name-or-id question]
-   (let [session-id (session/resolve-name session-name-or-id)]
+   (let [session-id (if (= session-name-or-id "default")
+                     "default"
+                     (session/resolve-name session-name-or-id))]
      (if session-id
        (do
+         ;; Create tmux session if it doesn't exist (for default session)
+         (when (and (= session-id "default") 
+                   (not (tmux/session-exists? session-id)))
+           (println "🚀 Starting default Q session...")
+           (tmux/create-session session-id)
+           (println "✅ Default Q session ready"))
+         
          ;; Update last activity
          (session/update-activity session-id)
          ;; Send question to tmux session and get response
@@ -83,16 +98,19 @@
   []
   (let [sessions (session/list-all)]
     (if (empty? sessions)
-      (println "📋 No Q sessions found. Create one with: bb create \"your context\"")
+      (println "📋 No Q sessions found. Use: bb ask \"your question\" to start with default session")
       (do
         (println "📋 Amazon Q Sessions:")
         (println "=====================")
         (doseq [session sessions]
           (let [current-marker (if (= (:id session) @current-session) "→ " "  ")
+                default-marker (if (:is-default session) "* " "  ")
                 age (session/format-age (:last-activity session))
                 context-preview (session/truncate-context (:context session) 60)]
-            (println (str current-marker (:name session) " (" (:message-count session) " msgs, " age ")")
-                    (println (str "    " context-preview)))))))))
+            (println (str default-marker current-marker (:name session) " (" (:message-count session) " msgs, " age ")"))
+            (println (str "    " context-preview))))
+        (println)
+        (println "Legend: * = default session, → = current session")))))
 
 (defn attach-session
   "Get tmux attach command for a session"
@@ -104,16 +122,25 @@
         (println (str "tmux attach -t " tmux-name)))
       (println (str "❌ Session not found: " session-name-or-id)))))
 
+(defn switch-to-default
+  "Switch current session to default"
+  []
+  (let [default-id (session/ensure-default-session)]
+    (reset! current-session default-id)
+    (println "✅ Switched to default session")))
+
 (defn switch-to
   "Switch current session"
   [session-name-or-id]
-  (let [session-id (session/resolve-name session-name-or-id)]
-    (if session-id
-      (do
-        (reset! current-session session-id)
-        (let [session (session/load session-id)]
-          (println (str "✅ Switched to session: " (:name session)))))
-      (println (str "❌ Session not found: " session-name-or-id)))))
+  (if (= session-name-or-id "default")
+    (switch-to-default)
+    (let [session-id (session/resolve-name session-name-or-id)]
+      (if session-id
+        (do
+          (reset! current-session session-id)
+          (let [session (session/load session-id)]
+            (println (str "✅ Switched to session: " (:name session)))))
+        (println (str "❌ Session not found: " session-name-or-id))))))
 
 ;; CLI Entry Point
 (defn -main [& args]
@@ -142,12 +169,15 @@
                  (switch-to session-name)
                  (println "Usage: bb switch session-name")))
     
+    "switch-default" (switch-to-default)
+    
     ;; Default help
     (do
       (println "QQ - Amazon Q Session Manager")
       (println "Usage:")
-      (println "  bb create \"context description\"  - Create new session")
-      (println "  bb ask \"question\"               - Ask current session")
-      (println "  bb list                          - List all sessions")
-      (println "  bb attach session-name          - Get tmux attach command")
-      (println "  bb switch session-name          - Switch current session"))))
+      (println "  bb ask \"question\"               - Ask question (uses current or default session)")
+      (println "  bb create \"context description\"  - Create new named session")
+      (println "  bb list                          - List all sessions with summaries")
+      (println "  bb switch session-name          - Switch to named session")
+      (println "  bb switch-default                - Switch to default session")
+      (println "  bb attach session-name          - Get tmux attach command"))))

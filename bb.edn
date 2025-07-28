@@ -24,4 +24,7 @@
           :task (shell "bb -m qq.core" "attach" (first *command-line-args*))}
   
   switch {:doc "Switch current session"
-          :task (shell "bb -m qq.core" "switch" (first *command-line-args*))}}}
+          :task (shell "bb -m qq.core" "switch" (first *command-line-args*))}
+  
+  switch-default {:doc "Switch to default session"
+                  :task (shell "bb -m qq.core" "switch-default")}}}

@@ -73,15 +73,47 @@
           nil))
       nil)))
 
+(defn ensure-default-session []
+  "Ensure default session exists, create if needed"
+  (let [default-session-id "default"]
+    (if-let [existing-session (load default-session-id)]
+      ;; Default session exists, return its ID
+      default-session-id
+      ;; Create new default session
+      (let [default-session {:id default-session-id
+                            :name "default"
+                            :context "General Amazon Q assistance - Timeline summary will be generated from interactions"
+                            :created-at (System/currentTimeMillis)
+                            :last-activity (System/currentTimeMillis)
+                            :message-count 0
+                            :is-default true}]
+        (println "🚀 Creating default Q session...")
+        ;; Save session metadata
+        (save default-session)
+        (println "✅ Default session created")
+        default-session-id))))
+
+(defn is-default-session? [session-id]
+  "Check if session is the default session"
+  (= session-id "default"))
+
+(defn get-default-session []
+  "Get default session, ensuring it exists"
+  (let [default-id (ensure-default-session)]
+    (load default-id)))
+
 (defn list-all []
-  "List all sessions"
+  "List all sessions, with default session marked"
   (let [registry (load-sessions-registry)]
     (->> registry
          (map (fn [[id data]]
-                (let [full-data (load (name id))]
-                  (merge data full-data))))
-         (sort-by :last-activity)
-         reverse)))
+                (let [full-data (load (name id))
+                      is-default (is-default-session? (name id))]
+                  (assoc (merge data full-data) :is-default is-default))))
+         (sort-by (fn [session] 
+                   ;; Sort default first, then by last activity
+                   [(not (:is-default session)) (- (:last-activity session))]))
+         vec)))
 
 (defn resolve-name [session-name-or-id]
   "Resolve session name to ID, with fuzzy matching"
