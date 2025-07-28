@@ -133,6 +133,61 @@
             :else
             (recur (inc attempts) max-attempts)))))))
 
+;; Enhanced Async Output with Progress Updates
+
+(defn send-with-progress [session-id question progress-callback]
+  "Send question with progress updates using improved polling"
+  (let [tmux-name (session-name session-id)
+        start-time (System/currentTimeMillis)]
+    ;; Log the question to timeline
+    (timeline/log-question session-id question)
+    
+    ;; Capture initial state
+    (let [initial-output (capture-output session-id)]
+      ;; Send question
+      (send-keys session-id question)
+      
+      ;; Wait for response with progress updates
+      (loop [attempts 0
+             max-attempts 60
+             last-output initial-output]
+        (Thread/sleep 2000)  ; Check every 2 seconds (faster than original)
+        (let [current-output (capture-output session-id)
+              new-content (if (str/includes? current-output last-output)
+                           (str/replace-first current-output last-output "")
+                           current-output)]
+          
+          (cond
+            ;; Got new content - call progress callback and continue
+            (and (not (str/blank? new-content))
+                 (not= current-output last-output))
+            (do
+              (progress-callback new-content current-output)
+              ;; Check if response seems complete
+              (if (or (str/includes? current-output "\n> ")
+                      (str/includes? current-output "➜")
+                      (str/includes? current-output "$")
+                      (> (- (System/currentTimeMillis) start-time) 30000))  ; 30 second max
+                (let [response-time (- (System/currentTimeMillis) start-time)
+                      final-response (if (str/includes? current-output initial-output)
+                                      (str/replace-first current-output initial-output "")
+                                      current-output)]
+                  (timeline/log-answer session-id final-response response-time)
+                  final-response)
+                (recur (inc attempts) max-attempts current-output)))
+            
+            ;; Timeout
+            (>= attempts max-attempts)
+            (let [timeout-response "⏰ Timeout: No response from Amazon Q"
+                  response-time (- (System/currentTimeMillis) start-time)]
+              (println "⏰ Timeout waiting for Q response")
+              (timeline/log-answer session-id timeout-response response-time)
+              timeout-response)
+            
+            ;; Continue waiting
+            :else
+            (recur (inc attempts) max-attempts last-output)))))))
+
 (defn send-async [session-id question]
   "Send question asynchronously with timeline logging, returns a promise"
   (let [promise (promise)]
@@ -143,6 +198,18 @@
           (deliver promise {:success true :response response}))
         (catch Exception e
           (println (str "❌ Error in async question: " (.getMessage e)))
+          (deliver promise {:success false :error (.getMessage e)}))))
+    promise))
+
+(defn send-async-with-progress [session-id question progress-callback]
+  "Send question asynchronously with progress updates"
+  (let [promise (promise)]
+    (future
+      (try
+        (let [response (send-with-progress session-id question progress-callback)]
+          (deliver promise {:success true :response response}))
+        (catch Exception e
+          (println (str "❌ Error in async progress question: " (.getMessage e)))
           (deliver promise {:success false :error (.getMessage e)}))))
     promise))
 

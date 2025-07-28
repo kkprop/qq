@@ -119,6 +119,48 @@
          (deliver error-promise {:success false :error (str "Session not found: " session-name-or-id)})
          error-promise)))))
 
+(defn ask-stream!
+  "Ask a question with streaming output (shows progress as Q responds)"
+  ([question]
+   (let [session-id (get-active-session)]
+     (ask-stream! session-id question)))
+  ([session-name-or-id question]
+   (let [session-id (if (= session-name-or-id "default")
+                     "default"
+                     (session/resolve-name session-name-or-id))]
+     (if session-id
+       (do
+         ;; Create tmux session if it doesn't exist (for default session)
+         (when (and (= session-id "default") 
+                   (not (tmux/session-exists? session-id)))
+           (println "🚀 Starting default Q session...")
+           (tmux/create-session session-id)
+           (println "✅ Default Q session ready"))
+         
+         ;; Update last activity
+         (session/update-activity session-id)
+         
+         ;; Send question with progress updates
+         (println "🚀 Question sent with progress updates...")
+         (println "📡 Q response (streaming):")
+         (println "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+         
+         (let [response (tmux/send-with-progress 
+                        session-id 
+                        question
+                        (fn [new-content full-content]
+                          ;; Print new content as it arrives
+                          (print new-content)
+                          (flush)))]
+           
+           (println)
+           (println "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+           (when (= session-id "default")
+             (session/update-default-context))
+           (println "✅ Streaming complete!")
+           {:success true :response response}))
+       (println (str "❌ Session not found: " session-name-or-id))))))
+
 (defn ask-async
   "Legacy alias for ask! - will be deprecated"
   ([question] (ask! question))
@@ -201,6 +243,13 @@
                      (println (str "❌ Error: " (:error result))))))
                (println "Usage: bb ask! \"your question\"")))
     
+    "ask-stream!" (let [question (if (= (count args) 2)
+                                  (second args)
+                                  (str/join " " (rest args)))]
+                    (if question
+                      (ask-stream! question)
+                      (println "Usage: bb ask-stream! \"your question\"")))
+    
     "list" (list-sessions)
     
     "attach" (let [session-name (second args)]
@@ -221,6 +270,7 @@
       (println "Usage:")
       (println "  bb ask \"question\"               - Ask question (uses current or default session)")
       (println "  bb ask! \"question\"              - Ask question asynchronously (returns immediately)")
+      (println "  bb ask-stream! \"question\"       - Ask question with streaming output (shows progress)")
       (println "  bb create \"context description\"  - Create new named session")
       (println "  bb list                          - List all sessions with summaries")
       (println "  bb switch session-name          - Switch to named session")
