@@ -134,16 +134,23 @@
         {:tool-name tool-name :command command}
         (let [line (first remaining)]
           (cond
-            ;; Tool usage line
+            ;; Q's tool usage format: "🛠️   Using tool: execute_bash"
             (str/includes? line "Using tool:")
-            (let [tool (second (str/split line #"Using tool:\s*"))]
-              (recur (rest remaining) (str/trim tool) command))
+            (let [tool-part (second (str/split line #"Using tool:\s*"))
+                  clean-tool (if tool-part (str/trim tool-part) nil)]
+              (recur (rest remaining) clean-tool command))
             
-            ;; Command line
-            (and (str/includes? line "shell command:")
-                 (not command))
-            (let [cmd-line (second (str/split line #"shell command:\s*"))]
-              (recur (rest remaining) tool-name (str/trim cmd-line)))
+            ;; Q's shell command format: "find . -name \"*.clj\" -type f | wc -l"
+            ;; Look for command lines that are not metadata
+            (and (not command)
+                 (not (str/includes? line "●"))
+                 (not (str/includes? line "⋮"))
+                 (not (str/includes? line "↳"))
+                 (not (str/includes? line "🛠️"))
+                 (not (str/includes? line "Allow this action?"))
+                 (not (str/blank? line))
+                 (> (count (str/trim line)) 5))  ; Reasonable command length
+            (recur (rest remaining) tool-name (str/trim line))
             
             ;; Continue searching
             :else

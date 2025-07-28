@@ -340,6 +340,25 @@
             response (extract-latest-response current-output question)]
         
         (cond
+          ;; Check for permission requests and handle intelligently
+          (str/includes? current-output "Allow this action?")
+          (let [context-lines (str/join "\n" (take-last 15 (str/split-lines current-output)))
+                approval-response (approval/get-approval-response context-lines)]
+            (if approval-response
+              (do
+                (println (str "🤖 Auto-responding with safety analysis: " approval-response))
+                (send-keys session-id approval-response)
+                (Thread/sleep 2000)
+                (recur (inc attempts) max-attempts))  ; Continue after approval
+              (do
+                (println "🔒 Manual approval required - pausing auto-response")
+                (println "📋 To continue manually: tmux attach -t qq-default")
+                (let [response-time (- (System/currentTimeMillis) start-time)]
+                  (timeline/log-answer session-id 
+                                     (str response "\n\n🔒 Manual approval required for tool usage") 
+                                     response-time)
+                  (str response "\n\n🔒 Manual approval required for tool usage")))))
+          
           ;; Got a complete response (non-empty and ends with standalone >)
           (and (not (str/blank? response))
                (str/ends-with? current-output "\n>\n"))
