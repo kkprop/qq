@@ -85,17 +85,44 @@
            response))
        (println (str "❌ Session not found: " session-name-or-id))))))
 
-(defn ask-async
-  "Ask a question asynchronously, returns a promise"
+(defn ask!
+  "Ask a question to current or specified session (async) - returns promise"
   ([question]
-   (ask-async @current-session question))
+   (let [session-id (get-active-session)]
+     (ask! session-id question)))
   ([session-name-or-id question]
-   (let [session-id (session/resolve-name session-name-or-id)]
+   (let [session-id (if (= session-name-or-id "default")
+                     "default"
+                     (session/resolve-name session-name-or-id))]
      (if session-id
        (do
+         ;; Create tmux session if it doesn't exist (for default session)
+         (when (and (= session-id "default") 
+                   (not (tmux/session-exists? session-id)))
+           (println "🚀 Starting default Q session...")
+           (tmux/create-session session-id)
+           (println "✅ Default Q session ready"))
+         
+         ;; Update last activity
          (session/update-activity session-id)
-         (tmux/send-async session-id question))
-       (println (str "❌ Session not found: " session-name-or-id))))))
+         ;; Send question asynchronously (timeline logging happens in tmux)
+         (let [response-promise (tmux/send-async session-id question)]
+           ;; Return enhanced promise that also updates default context
+           (let [enhanced-promise (promise)]
+             (future
+               (let [result @response-promise]
+                 (when (and (:success result) (= session-id "default"))
+                   (session/update-default-context))
+                 (deliver enhanced-promise result)))
+             enhanced-promise)))
+       (let [error-promise (promise)]
+         (deliver error-promise {:success false :error (str "Session not found: " session-name-or-id)})
+         error-promise)))))
+
+(defn ask-async
+  "Legacy alias for ask! - will be deprecated"
+  ([question] (ask! question))
+  ([session-name-or-id question] (ask! session-name-or-id question)))
 
 (defn list-sessions
   "List all sessions with context summaries"
@@ -161,6 +188,19 @@
               (ask question)
               (println "Usage: bb ask \"your question\"")))
     
+    "ask!" (let [question (if (= (count args) 2)
+                           (second args)
+                           (str/join " " (rest args)))]
+             (if question
+               (let [result-promise (ask! question)]
+                 (println "🚀 Question sent asynchronously...")
+                 (println "⏳ Waiting for response...")
+                 (let [result @result-promise]
+                   (if (:success result)
+                     (println (:response result))
+                     (println (str "❌ Error: " (:error result))))))
+               (println "Usage: bb ask! \"your question\"")))
+    
     "list" (list-sessions)
     
     "attach" (let [session-name (second args)]
@@ -180,6 +220,7 @@
       (println "QQ - Amazon Q Session Manager")
       (println "Usage:")
       (println "  bb ask \"question\"               - Ask question (uses current or default session)")
+      (println "  bb ask! \"question\"              - Ask question asynchronously (returns immediately)")
       (println "  bb create \"context description\"  - Create new named session")
       (println "  bb list                          - List all sessions with summaries")
       (println "  bb switch session-name          - Switch to named session")

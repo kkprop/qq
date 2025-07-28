@@ -138,10 +138,11 @@
   (let [promise (promise)]
     (future
       (try
+        ;; Use send-and-wait which already handles timeline logging
         (let [response (send-and-wait session-id question)]
-          ;; Timeline logging is handled in send-and-wait
           (deliver promise {:success true :response response}))
         (catch Exception e
+          (println (str "❌ Error in async question: " (.getMessage e)))
           (deliver promise {:success false :error (.getMessage e)}))))
     promise))
 

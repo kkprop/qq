@@ -17,6 +17,9 @@
   ask {:doc "Ask a question to current or specified session"
        :task (apply shell "bb -m qq.core" "ask" *command-line-args*)}
   
+  ask! {:doc "Ask question asynchronously (returns immediately)"
+        :task (apply shell "bb -m qq.core" "ask!" *command-line-args*)}
+  
   list {:doc "List all Q sessions with context summaries"
         :task (shell "bb -m qq.core" "list")}
   
