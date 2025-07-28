@@ -135,6 +135,61 @@
 
 ;; Enhanced Async Output with Progress Updates
 
+(defn- extract-latest-response [tmux-output question]
+  "Extract the response to the most recent question based on actual Q timeline structure"
+  (let [lines (str/split-lines tmux-output)
+        ;; Find the last occurrence of our question (starts with > and contains question)
+        question-idx (last (keep-indexed 
+                           (fn [idx line] 
+                             (when (and (str/starts-with? (str/trim line) ">")
+                                       (str/includes? line question)) 
+                               idx)) 
+                           lines))]
+    (if question-idx
+      ;; Extract response: from line after question until standalone ">"
+      (let [response-start (inc question-idx)
+            response-lines (take-while 
+                           #(not (= (str/trim %) ">"))
+                           (drop response-start lines))]
+        (str/trim (str/join "\n" response-lines)))
+      "")))
+
+(defn send-and-wait-improved [session-id question]
+  "Send question and wait for response using improved Q timeline understanding"
+  (let [start-time (System/currentTimeMillis)]
+    ;; Log the question to timeline
+    (timeline/log-question session-id question)
+    
+    ;; Send question
+    (send-keys session-id question)
+    
+    ;; Wait for response with simple polling based on actual Q behavior
+    (loop [attempts 0
+           max-attempts 30]  ; 30 attempts = 60 seconds max
+      (Thread/sleep 2000)  ; Check every 2 seconds
+      (let [current-output (capture-output session-id)
+            response (extract-latest-response current-output question)]
+        
+        (cond
+          ;; Got a complete response (non-empty and ends with standalone >)
+          (and (not (str/blank? response))
+               (str/ends-with? current-output "\n>\n"))
+          (let [response-time (- (System/currentTimeMillis) start-time)]
+            (timeline/log-answer session-id response response-time)
+            response)
+          
+          ;; Timeout
+          (>= attempts max-attempts)
+          (let [timeout-response "⏰ Timeout: No response from Amazon Q"
+                response-time (- (System/currentTimeMillis) start-time)]
+            (println "⏰ Timeout waiting for Q response")
+            (timeline/log-answer session-id timeout-response response-time)
+            timeout-response)
+          
+          ;; Continue waiting
+          :else
+          (recur (inc attempts) max-attempts))))))
+
 (defn- extract-current-response [current-output question]
   "Extract just the response to the current question from tmux output"
   (let [lines (str/split-lines current-output)
@@ -221,12 +276,12 @@
             (recur (inc attempts) max-attempts last-output)))))))
 
 (defn send-async [session-id question]
-  "Send question asynchronously with timeline logging, returns a promise"
+  "Send question asynchronously using improved Q timeline understanding"
   (let [promise (promise)]
     (future
       (try
-        ;; Use send-with-progress with no-op callback for better completion detection
-        (let [response (send-with-progress session-id question (fn [_ _]))]
+        ;; Use the improved send-and-wait based on actual Q behavior
+        (let [response (send-and-wait-improved session-id question)]
           (deliver promise {:success true :response response}))
         (catch Exception e
           (println (str "❌ Error in async question: " (.getMessage e)))
