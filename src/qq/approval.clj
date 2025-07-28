@@ -41,7 +41,24 @@
    ;; Remote execution
    #"ssh.*;"
    #"scp.*;"
-   #"rsync.*--delete"])
+   #"rsync.*--delete"
+   
+   ;; Dangerous file operations
+   #"rm\s+.*\*"  ; Wildcard deletions
+   #"mv\s+.*\s+/dev/null"  ; Moving to null
+   #">\s*/dev/sd"  ; Writing to disk devices
+   #"format\s+"  ; Format commands
+   
+   ;; Dangerous network operations
+   #"iptables"
+   #"ufw\s+"
+   #"firewall"
+   
+   ;; Dangerous system modifications
+   #"/etc/passwd"
+   #"/etc/shadow"
+   #"crontab\s+-e"
+   #"at\s+now"])
 
 (def safe-patterns
   "Patterns that are generally safe operations"
@@ -75,7 +92,24 @@
    ;; Package info (read-only)
    #"^npm\s+list"
    #"^pip\s+list"
-   #"^brew\s+list"])
+   #"^brew\s+list"
+   
+   ;; Safe file operations
+   #"^mkdir\s+-p\s+"  ; Creating directories with -p flag
+   #"^cp\s+.*\s+backup"  ; Copying to backup directories
+   #"^cp\s+-r\s+.*\s+backup"  ; Recursive copy to backup
+   #"^rsync\s+-av\s+.*\s+backup"  ; Safe rsync to backup
+   
+   ;; Safe text processing
+   #"^echo\s+"
+   #"^printf\s+"
+   #"^awk\s+"
+   #"^sed\s+'s/"  ; Safe sed substitutions (read-only style)
+   
+   ;; Safe archive operations (read-only)
+   #"^tar\s+-tf"  ; List tar contents
+   #"^unzip\s+-l"  ; List zip contents
+   #"^zip\s+-r\s+.*\.zip\s+.*"])  ; Create zip archives
 
 (defn analyze-command-safety [command]
   "Analyze if a command is safe to execute automatically"
