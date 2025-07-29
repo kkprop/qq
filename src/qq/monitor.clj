@@ -337,3 +337,163 @@
                                     (java.util.Date. (:last-scan summary))
                                     "Never")))
     (println (str "🔄 Monitoring: " (if (:monitoring-active summary) "ON" "OFF")))))
+
+;; ============================================================================
+;; SYSTEM RESOURCE MONITORING
+;; ============================================================================
+
+(defn get-pane-pid [session-name window-index pane-index]
+  "Get the PID of a specific tmux pane"
+  (try
+    (let [result (p/shell {:out :string :err :string}
+                         "tmux" "display-message" "-t" (str session-name ":" window-index "." pane-index)
+                         "-p" "#{pane_pid}")]
+      (if (zero? (:exit result))
+        (Integer/parseInt (str/trim (:out result)))
+        nil))
+    (catch Exception e
+      nil)))
+
+(defn get-process-stats [pid]
+  "Get CPU and memory stats for a process"
+  (try
+    (let [result (p/shell {:out :string :err :string} 
+                         "ps" "-p" (str pid) "-o" "pid,pcpu,pmem,rss,comm")]
+      (if (zero? (:exit result))
+        (let [lines (str/split-lines (:out result))
+              data-line (when (> (count lines) 1) (str/trim (second lines)))]
+          (when-not (str/blank? data-line)
+            (let [parts (str/split data-line #"\s+")]
+              (when (>= (count parts) 5)
+                {:pid (Integer/parseInt (nth parts 0))
+                 :cpu-percent (Double/parseDouble (nth parts 1))
+                 :mem-percent (Double/parseDouble (nth parts 2))
+                 :rss-kb (Integer/parseInt (nth parts 3))
+                 :command (nth parts 4)}))))
+        nil))
+    (catch Exception e
+      nil)))
+
+(defn get-window-resource-usage [session-name window-index]
+  "Get resource usage for a window"
+  (when-let [main-pid (get-pane-pid session-name window-index 0)]
+    (when-let [stats (get-process-stats main-pid)]
+      (merge stats
+             {:session-name session-name
+              :window-index window-index
+              :rss-mb (/ (:rss-kb stats) 1024.0)
+              :timestamp (System/currentTimeMillis)}))))
+
+(defn format-memory [mb]
+  "Format memory in MB with appropriate units"
+  (cond
+    (>= mb 1024) (str (format "%.1f" (/ mb 1024)) " GB")
+    (>= mb 1) (str (format "%.1f" mb) " MB")
+    :else (str (format "%.1f" (* mb 1024)) " KB")))
+
+(defn display-window-resources [window-stats]
+  "Display resource usage for a window"
+  (when window-stats
+    (let [cpu-color (cond (>= (:cpu-percent window-stats) 50) "🔴"
+                         (>= (:cpu-percent window-stats) 20) "🟡"
+                         :else "🟢")
+          mem-color (cond (>= (:mem-percent window-stats) 10) "🔴"
+                         (>= (:mem-percent window-stats) 5) "🟡"
+                         :else "🟢")]
+      (println (str "📺 " (:session-name window-stats) ":" (:window-index window-stats)
+                   " [" (:command window-stats) "]"
+                   " " cpu-color " CPU: " (format "%.1f" (:cpu-percent window-stats)) "%"
+                   " " mem-color " MEM: " (format "%.1f" (:mem-percent window-stats)) "% "
+                   "(" (format-memory (:rss-mb window-stats)) ")")))))
+
+(defn display-all-window-resources []
+  "Display resource usage for all tmux windows"
+  (println "🖥️  TMUX WINDOW RESOURCE MONITORING")
+  (println "==================================")
+  (let [windows (get-all-windows)]
+    (if (empty? windows)
+      (println "❌ No tmux sessions found")
+      (let [window-stats (keep #(get-window-resource-usage (:session-name %) (:window-index %)) windows)
+            sorted-stats (sort-by :cpu-percent > window-stats)]
+        (if (empty? sorted-stats)
+          (println "❌ Could not get resource information")
+          (do
+            (doseq [stats sorted-stats]
+              (display-window-resources stats))
+            (let [total-cpu (reduce + (map :cpu-percent sorted-stats))
+                  total-mem (reduce + (map :mem-percent sorted-stats))
+                  total-rss (reduce + (map :rss-mb sorted-stats))]
+              (println (str "\n📊 TOTALS: CPU: " (format "%.1f" total-cpu) "% "
+                           "MEM: " (format "%.1f" total-mem) "% "
+                           "(" (format-memory total-rss) ")")))))))))
+
+(defn display-q-session-resources []
+  "Display resource usage for Q-related sessions only"
+  (println "🤖 Q SESSION RESOURCE MONITORING")
+  (println "================================")
+  (let [q-sessions (get-q-sessions)]
+    (if (empty? q-sessions)
+      (println "❌ No Q sessions found")
+      (let [q-windows (mapcat #(list-tmux-windows (:session-name %)) q-sessions)
+            window-stats (keep #(get-window-resource-usage (:session-name %) (:window-index %)) q-windows)
+            sorted-stats (sort-by :cpu-percent > window-stats)]
+        (if (empty? sorted-stats)
+          (println "❌ Could not get resource information for Q sessions")
+          (do
+            (doseq [stats sorted-stats]
+              (display-window-resources stats))
+            (let [total-cpu (reduce + (map :cpu-percent sorted-stats))
+                  total-mem (reduce + (map :mem-percent sorted-stats))
+                  total-rss (reduce + (map :rss-mb sorted-stats))]
+              (println (str "\n🤖 Q TOTALS: CPU: " (format "%.1f" total-cpu) "% "
+                           "MEM: " (format "%.1f" total-mem) "% "
+                           "(" (format-memory total-rss) ")")))))))))
+
+(defn display-top-consumers [& {:keys [limit] :or {limit 10}}]
+  "Display top resource consuming windows"
+  (println (str "🔥 TOP " limit " RESOURCE CONSUMERS"))
+  (println "==============================")
+  (let [windows (get-all-windows)
+        window-stats (keep #(get-window-resource-usage (:session-name %) (:window-index %)) windows)
+        ;; Sort by CPU first, then by memory if CPU is equal, then by memory size
+        top-consumers (take limit 
+                           (sort-by (juxt #(- (:cpu-percent %)) 
+                                         #(- (:mem-percent %)) 
+                                         #(- (:rss-mb %))) 
+                                   window-stats))]
+    (if (empty? top-consumers)
+      (println "❌ No resource usage data available")
+      (do
+        (doseq [stats top-consumers]
+          (display-window-resources stats))
+        (println (str "\n📊 Sorted by: CPU% (desc) → MEM% (desc) → Memory Size (desc)"))))))
+
+(defn display-top-consumers-detailed [& {:keys [limit] :or {limit 10}}]
+  "Display top resource consuming windows with detailed sorting info"
+  (println (str "🔥 TOP " limit " RESOURCE CONSUMERS (DETAILED)"))
+  (println "===========================================")
+  (let [windows (get-all-windows)
+        window-stats (keep #(get-window-resource-usage (:session-name %) (:window-index %)) windows)
+        top-consumers (take limit 
+                           (sort-by (juxt #(- (:cpu-percent %)) 
+                                         #(- (:mem-percent %)) 
+                                         #(- (:rss-mb %))) 
+                                   window-stats))]
+    (if (empty? top-consumers)
+      (println "❌ No resource usage data available")
+      (do
+        (println "Rank | Session:Window | Command | CPU% | MEM% | Memory | Sort Key")
+        (println "-----|----------------|---------|------|------|--------|----------")
+        (doseq [[idx stats] (map-indexed vector top-consumers)]
+          (println (format "%4d | %s:%d | %s | %4.1f%% | %4.1f%% | %s | (%.1f,%.1f,%.1f)"
+                          (inc idx)
+                          (:session-name stats)
+                          (:window-index stats)
+                          (subs (:command stats) 0 (min 8 (count (:command stats))))
+                          (:cpu-percent stats)
+                          (:mem-percent stats)
+                          (format-memory (:rss-mb stats))
+                          (:cpu-percent stats)
+                          (:mem-percent stats)
+                          (:rss-mb stats))))
+        (println (str "\n📊 Sort Key: (CPU%, MEM%, Memory MB) - all descending"))))))

@@ -30,4 +30,33 @@
           :task (shell "bb -m qq.core" "switch" (first *command-line-args*))}
   
   switch-default {:doc "Switch to default session"
-                  :task (shell "bb -m qq.core" "switch-default")}}}
+                  :task (shell "bb -m qq.core" "switch-default")}
+  
+  ;; Monitoring tasks
+  monitor-windows {:doc "List all tmux windows"
+                   :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-all-windows)")}
+  
+  monitor-q {:doc "Show Q-related sessions"
+             :task (shell "bb -e" "(require '[qq.monitor :as m]) (println \"🤖 Q-RELATED SESSIONS:\") (doseq [s (m/get-q-sessions)] (println (str \"  📺 \" (:session-name s) \" (\" (:window-count s) \" windows)\")))")}
+  
+  monitor-status {:doc "Show monitoring status"
+                  :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-monitoring-status)")}
+  
+  monitor-activity {:doc "Show recent activity"
+                    :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-recent-activity :minutes 30 :limit 20)")}
+  
+  monitor-summary {:doc "Show Q conversation summary"
+                   :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-q-summary)")}
+  
+  ;; Resource monitoring tasks
+  monitor-resources {:doc "Show CPU and memory usage for all tmux windows"
+                     :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-all-window-resources)")}
+  
+  monitor-q-resources {:doc "Show CPU and memory usage for Q sessions only"
+                       :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-q-session-resources)")}
+  
+  monitor-top {:doc "Show top resource consuming windows"
+               :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-top-consumers :limit 10)")}
+  
+  monitor-top-detailed {:doc "Show top resource consuming windows with detailed sorting info"
+                        :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-top-consumers-detailed :limit 10)")}}}
