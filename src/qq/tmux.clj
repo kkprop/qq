@@ -233,7 +233,7 @@
                 (Thread/sleep 1000))
               (do
                 (println "🔒 Manual approval required - pausing auto-response")
-                (println "📋 To continue manually: tmux attach -t qq-default"))))))))
+                (println "📋 To continue manually: tmux attach -t qq-default")))))))))
 
 (defn send-and-wait-advanced [session-id question]
   "Advanced Q conversation handler for multi-round responses with tool usage"
