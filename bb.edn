@@ -138,11 +138,11 @@
                      :task (cmd/display-command-summary)}
   
   ;; Web Interface Tasks
-  web {:doc "Start QQ web dashboard on localhost:8080"
-       :task (web/start-server {:port 8080})}
+  web {:doc "Start QQ web dashboard on localhost:9090"
+       :task (web/start-server {:port 9090})}
   
   web-dev {:doc "Start web server in development mode"
-           :task (web/start-dev-server {:port 8080})}
+           :task (web/start-dev-server {:port 9090})}
   
   web-stop {:doc "Stop the running web server"
             :task (web/stop-server)}

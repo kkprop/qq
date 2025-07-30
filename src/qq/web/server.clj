@@ -9,7 +9,7 @@
             [qq.tmux :as tmux]))
 
 ;; Server configuration
-(def ^:private DEFAULT-PORT 8080)
+(def ^:private DEFAULT-PORT 9090)
 (def ^:private STATIC-DIR "web/static")
 
 ;; Simple HTTP server using Babashka's process capabilities
