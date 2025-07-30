@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 QQ Dashboard</title>
+    <link rel="stylesheet" href="static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🤖 QQ Dashboard</h1>
+            <div class="header-info">
+                <span class="session-count">Sessions: 0</span>
+                <span class="status">🟢 Online</span>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <section class="sessions-section">
+                <h2>Active Sessions</h2>
+                <div class="sessions-grid">
+                    <div class="empty-state">
+                           <h3>No Active Sessions</h3>
+                           <p>Create your first Q session to get started!</p>
+                           <button class="btn btn-success" onclick="alert('Session creation coming soon!')">Create Session</button>
+                         </div>
+                </div>
+                
+                <div class="actions">
+                    <button class="btn btn-success" onclick="alert('Create session coming soon!')">Create New Session</button>
+                    <button class="btn btn-info" onclick="location.reload()">Refresh</button>
+                </div>
+            </section>
+            
+            <aside class="system-info">
+                <h2>System Status</h2>
+                <div class="system-stats">
+                    <div class="stat">
+                        <span class="stat-label">CPU Usage</span>
+                        <span class="stat-value">--</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Memory</span>
+                        <span class="stat-value">--</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Sessions</span>
+                        <span class="stat-value">0</span>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+    
+    <script src="static/js/dashboard.js"></script>
+</body>
+</html>

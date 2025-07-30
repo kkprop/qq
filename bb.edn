@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "web"]  ; Include web directory for templates/static files
  :deps {org.clojure/data.json {:mvn/version "2.4.0"}
         babashka/process {:mvn/version "0.5.21"}}
  
@@ -7,7 +7,8 @@
              [qq.core :as core]
              [qq.monitor :as monitor]
              [qq.context-monitor :as context-monitor]
-             [qq.command-wrapper :as cmd])
+             [qq.command-wrapper :as cmd]
+             [qq.web.server :as web])  ; Add web server namespace
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -134,4 +135,17 @@
                       :task (cmd/display-command-activity)}
   
   monitor-q-summary {:doc "Show Q command usage summary"
-                     :task (cmd/display-command-summary)}}}
+                     :task (cmd/display-command-summary)}
+  
+  ;; Web Interface Tasks
+  web {:doc "Start QQ web dashboard on localhost:8080"
+       :task (web/start-server {:port 8080})}
+  
+  web-dev {:doc "Start web server in development mode"
+           :task (web/start-dev-server {:port 8080})}
+  
+  web-stop {:doc "Stop the running web server"
+            :task (web/stop-server)}
+  
+  web-status {:doc "Check web server status"
+              :task (println (web/server-status))}}}
