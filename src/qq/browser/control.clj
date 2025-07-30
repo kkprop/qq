@@ -411,9 +411,132 @@
       (finally
         (println "🛑 Closing browser...")
         (e/quit driver)
-        (println "✅ Browser closed"))))
+        (println "✅ Browser closed")))))
 
-(defn debug-current-browser
+(defn test-create-session-button
+  "Test the Create Session button functionality"
+  [driver]
+  (println "🧪 TESTING CREATE SESSION BUTTON")
+  (println "================================")
+  
+  ;; First, refresh the page to get latest JavaScript
+  (println "🔄 Refreshing page to load updated JavaScript...")
+  (e/refresh driver)
+  (Thread/sleep 3000)
+  
+  ;; Check if button exists
+  (if (e/exists? driver ".btn-success")
+    (do
+      (println "✅ Create Session button found")
+      
+      ;; Take screenshot before clicking
+      (take-screenshot driver "before-create-session")
+      
+      ;; Click the Create Session button
+      (println "🖱️  Clicking Create Session button...")
+      (e/click driver ".btn-success")
+      (Thread/sleep 1000)
+      
+      ;; Handle the prompt (if it appears)
+      (try
+        (println "📝 Handling session name prompt...")
+        (e/js-execute driver "
+          // Override prompt to automatically provide a test name
+          window.prompt = function(message) {
+            console.log('Prompt intercepted:', message);
+            return 'etaoin-test-session';
+          };
+        ")
+        
+        ;; Click button again now that prompt is overridden
+        (e/click driver ".btn-success")
+        (Thread/sleep 2000)
+        
+        ;; Check console logs
+        (println "📋 Checking console logs...")
+        (let [logs (e/get-logs driver :browser)]
+          (doseq [log (take 10 logs)]
+            (println (str "  Console: " (:level log) " - " (:message log)))))
+        
+        ;; Take screenshot after
+        (take-screenshot driver "after-create-session")
+        
+        ;; Check if sessions updated
+        (println "🔍 Checking if sessions updated...")
+        (let [sessions-result (e/js-execute driver "
+          return fetch('/api/sessions')
+            .then(r => r.json())
+            .then(data => data.length)
+            .catch(e => 'ERROR');")]
+          (println (str "📊 Number of sessions: " sessions-result)))
+        
+        (catch Exception e
+          (println (str "⚠️ Error during test: " (.getMessage e)))))
+    
+    (println "❌ Create Session button not found")))
+
+(defn automated-dashboard-test
+  "Run automated tests on the dashboard"
+  [driver]
+  (println "🤖 AUTOMATED DASHBOARD TESTING")
+  (println "==============================")
+  
+  ;; Test 1: Page load
+  (println "\n1️⃣ Testing page load...")
+  (e/go driver DASHBOARD-URL)
+  (Thread/sleep 3000)
+  (println "✅ Page loaded")
+  
+  ;; Test 2: API calls
+  (println "\n2️⃣ Testing API calls...")
+  (let [api-result (e/js-execute driver "
+    return Promise.all([
+      fetch('/api/sessions').then(r => r.json()),
+      fetch('/api/system/status').then(r => r.json())
+    ]).then(results => ({
+      sessions: results[0].length,
+      status: results[1].cpu
+    })).catch(e => ({error: e.message}));")]
+    (println (str "📊 API test result: " api-result)))
+  
+  ;; Test 3: Create Session button
+  (println "\n3️⃣ Testing Create Session button...")
+  (test-create-session-button driver)
+  
+  ;; Test 4: Final state
+  (println "\n4️⃣ Final dashboard state...")
+  (debug-live-browser driver)
+  
+  (println "\n✅ Automated testing complete!"))
+
+(defn interactive-automated-test
+  "Run interactive automated test - best of both worlds"
+  []
+  (println "🎮 INTERACTIVE AUTOMATED TESTING")
+  (println "================================")
+  (println "🤖 I'll control the browser automatically")
+  (println "👀 You can watch the automation happen")
+  (println "")
+  
+  (let [driver (start-browser)]
+    (try
+      ;; Run automated tests
+      (automated-dashboard-test driver)
+      
+      ;; Keep browser open for inspection
+      (println "")
+      (println "🔍 Browser will stay open for manual inspection...")
+      (println "📊 Check the dashboard state and console logs")
+      (println "⏸️  Press Enter to close browser...")
+      (read-line)
+      
+      (catch Exception e
+        (println (str "❌ Error during automated testing: " (.getMessage e)))
+        (take-screenshot driver "error-automated-test"))
+      (finally
+        (println "🛑 Closing browser...")
+        (e/quit driver)
+        (println "✅ Automated testing session ended")))))
   "Debug the current browser - to be run in a separate terminal while browser is open"
   []
   (println "🔍 DEBUGGING CURRENT BROWSER SESSION")
@@ -429,4 +552,4 @@
       (Thread/sleep 2000)
       (extract-browser-debug-info driver)
       (finally
-        (e/quit driver))))))
+        (e/quit driver)))))

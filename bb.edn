@@ -169,4 +169,7 @@
                   :task (browser/simple-browser-test)}
   
   browser-debug-live {:doc "Debug the currently open browser (run while browser is open)"
-                      :task (browser/debug-current-browser)}}}
+                      :task (browser/debug-current-browser)}
+  
+  browser-auto-test {:doc "Run automated browser tests with Etaoin control"
+                     :task (browser/interactive-automated-test)}}}
