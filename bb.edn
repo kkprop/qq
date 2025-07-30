@@ -3,7 +3,8 @@
         babashka/process {:mvn/version "0.5.21"}}
  
  :tasks
- {:requires ([qq.core :as core]
+ {:requires ([clojure.string :as str]
+             [qq.core :as core]
              [qq.monitor :as monitor]
              [qq.context-monitor :as context-monitor]
              [qq.command-wrapper :as cmd])
@@ -17,25 +18,46 @@
   
   ;; Main QQ commands
   create {:doc "Create a new Q session with context"
-          :task (shell "bb -m qq.core" "create" (first *command-line-args*))}
+          :task (let [context (first *command-line-args*)]
+                  (if context
+                    (core/create-session {:context context})
+                    (println "Usage: bb create \"your context description\"")))}
   
   ask {:doc "Ask a question to current or specified session"
-       :task (apply shell "bb -m qq.core" "ask" *command-line-args*)}
+       :task (let [question (if (= (count *command-line-args*) 1)
+                             (first *command-line-args*)
+                             (str/join " " *command-line-args*))]
+               (if question
+                 (core/ask question)
+                 (println "Usage: bb ask \"your question\"")))}
   
   ask! {:doc "Ask question asynchronously (returns immediately, streams output)"
-        :task (apply shell "bb -m qq.core" "ask!" *command-line-args*)}
+        :task (let [question (if (= (count *command-line-args*) 1)
+                              (first *command-line-args*)
+                              (str/join " " *command-line-args*))]
+                (if question
+                  (do
+                    (core/ask! question)
+                    (println "🎯 Question sent! Processing in background with streaming output..."))
+                  (println "Usage: bb ask! \"your question\"")))}
   
   list {:doc "List all Q sessions with context summaries"
-        :task (shell "bb -m qq.core" "list")}
+        :task (core/list-sessions)}
   
   attach {:doc "Get tmux attach command for a session"
-          :task (shell "bb -m qq.core" "attach" (first *command-line-args*))}
+          :task (let [session-name (first *command-line-args*)]
+                  (if session-name
+                    (core/attach-session session-name)
+                    (println "Usage: bb attach session-name")))}
   
   switch {:doc "Switch current session"
-          :task (shell "bb -m qq.core" "switch" (first *command-line-args*))}
+          :task (let [session-name (first *command-line-args*)]
+                  (if session-name
+                    (core/switch-to session-name)
+                    (println "Usage: bb switch session-name")))}
   
   switch-default {:doc "Switch to default session"
-                  :task (shell "bb -m qq.core" "switch-default")}
+                  :task (core/switch-to-default)}
   
   ;; Monitoring tasks
   monitor-windows {:doc "List all tmux windows"
