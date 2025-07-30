@@ -1,6 +1,7 @@
 {:paths ["src" "web"]  ; Include web directory for templates/static files
  :deps {org.clojure/data.json {:mvn/version "2.4.0"}
-        babashka/process {:mvn/version "0.5.21"}}
+        babashka/process {:mvn/version "0.5.21"}
+        etaoin/etaoin {:mvn/version "1.0.40"}}
  
  :tasks
  {:requires ([clojure.string :as str]
@@ -8,7 +9,8 @@
              [qq.monitor :as monitor]
              [qq.context-monitor :as context-monitor]
              [qq.command-wrapper :as cmd]
-             [qq.web.server :as web])  ; Add web server namespace
+             [qq.web.server :as web]
+             [qq.browser.control :as browser])  ; Add browser control namespace
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -148,4 +150,23 @@
             :task (web/stop-server)}
   
   web-status {:doc "Check web server status"
-              :task (println (web/server-status))}}}
+              :task (println (web/server-status))}
+  
+  ;; Browser Automation Tasks
+  browser-debug {:doc "Debug QQ dashboard with browser automation"
+                 :task (browser/debug-session-rendering-issue)}
+  
+  browser-test {:doc "Quick test if dashboard loads properly"
+                :task (browser/test-dashboard-loads)}
+  
+  browser-screenshot {:doc "Take a quick screenshot of dashboard"
+                      :task (browser/quick-screenshot)}
+  
+  browser-interactive {:doc "Start interactive debugging session"
+                       :task (browser/interactive-debug)}
+  
+  browser-simple {:doc "Open browser to dashboard and wait for manual inspection"
+                  :task (browser/simple-browser-test)}
+  
+  browser-debug-live {:doc "Debug the currently open browser (run while browser is open)"
+                      :task (browser/debug-current-browser)}}}
