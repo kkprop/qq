@@ -3,7 +3,12 @@
         babashka/process {:mvn/version "0.5.21"}}
  
  :tasks
- {;; Development tasks
+ {:requires ([qq.core :as core]
+             [qq.monitor :as monitor]
+             [qq.context-monitor :as context-monitor]
+             [qq.command-wrapper :as cmd])
+  
+  ;; Development tasks
   dev-repl {:doc "Start development REPL"
             :task (clojure "-M:repl")}
   
@@ -34,29 +39,77 @@
   
   ;; Monitoring tasks
   monitor-windows {:doc "List all tmux windows"
-                   :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-all-windows)")}
+                   :task (monitor/display-all-windows)}
   
   monitor-q {:doc "Show Q-related sessions"
-             :task (shell "bb -e" "(require '[qq.monitor :as m]) (println \"🤖 Q-RELATED SESSIONS:\") (doseq [s (m/get-q-sessions)] (println (str \"  📺 \" (:session-name s) \" (\" (:window-count s) \" windows)\")))")}
+             :task (do (println "🤖 Q-RELATED SESSIONS:")
+                      (doseq [s (monitor/get-q-sessions)]
+                        (println (str "  📺 " (:session-name s) " (" (:window-count s) " windows)"))))}
   
   monitor-status {:doc "Show monitoring status"
-                  :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-monitoring-status)")}
+                  :task (monitor/display-monitoring-status)}
   
   monitor-activity {:doc "Show recent activity"
-                    :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-recent-activity :minutes 30 :limit 20)")}
+                    :task (monitor/display-recent-activity :minutes 30 :limit 20)}
   
   monitor-summary {:doc "Show Q conversation summary"
-                   :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-q-summary)")}
+                   :task (monitor/display-q-summary)}
   
   ;; Resource monitoring tasks
   monitor-resources {:doc "Show CPU and memory usage for all tmux windows"
-                     :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-all-window-resources)")}
+                     :task (monitor/display-all-window-resources)}
   
   monitor-q-resources {:doc "Show CPU and memory usage for Q sessions only"
-                       :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-q-session-resources)")}
+                       :task (monitor/display-q-session-resources)}
   
   monitor-top {:doc "Show top resource consuming windows"
-               :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-top-consumers :limit 10)")}
+               :task (monitor/display-top-consumers :limit 10)}
   
   monitor-top-detailed {:doc "Show top resource consuming windows with detailed sorting info"
-                        :task (shell "bb -e" "(require '[qq.monitor :as m]) (m/display-top-consumers-detailed :limit 10)")}}}
+                        :task (monitor/display-top-consumers-detailed :limit 10)}
+  
+  ;; Context monitoring tasks
+  monitor-context-activity {:doc "Show recent /context command activity"
+                            :task (context-monitor/display-context-activity)}
+  
+  monitor-context-status {:doc "Show current context status for all Q sessions"
+                          :task (context-monitor/display-all-contexts)}
+  
+  monitor-context-watch {:doc "Continuously watch for context activity"
+                         :task (context-monitor/watch-context-activity)}
+  
+  monitor-context-scan {:doc "Scan all Q sessions once for context activity"
+                        :task (do (context-monitor/monitor-all-q-sessions)
+                                 (println "✅ Context monitoring scan complete"))}
+  
+  ;; Transparent Q command wrappers
+  context {:doc "Transparent wrapper for Q /context commands (usage: bb context add file.clj)"
+           :task (apply cmd/cmd-context *command-line-args*)}
+  
+  q-save {:doc "Save Q conversation with monitoring (usage: bb q-save [name])"
+          :task (apply cmd/cmd-save *command-line-args*)}
+  
+  q-load {:doc "Load Q conversation with monitoring (usage: bb q-load [name])"
+          :task (apply cmd/cmd-load *command-line-args*)}
+  
+  q-tools {:doc "View Q tools and permissions with monitoring"
+           :task (cmd/cmd-tools)}
+  
+  q-usage {:doc "Show Q context usage with monitoring integration"
+           :task (cmd/cmd-usage)}
+  
+  q-model {:doc "Select Q model with tracking (usage: bb q-model [model-name])"
+           :task (apply cmd/cmd-model *command-line-args*)}
+  
+  q-compact {:doc "Compact Q conversation with monitoring"
+             :task (cmd/cmd-compact)}
+  
+  q-editor {:doc "Open external editor for Q prompt composition"
+            :task (cmd/cmd-editor)}
+  
+  ;; Q command monitoring
+  monitor-q-commands {:doc "Show recent Q command activity"
+                      :task (cmd/display-command-activity)}
+  
+  monitor-q-summary {:doc "Show Q command usage summary"
+                     :task (cmd/display-command-summary)}}}
