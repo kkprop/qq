@@ -24,7 +24,13 @@
              [qq.browser.direct-websocket-test :as direct-ws-test]
              [qq.browser.user-behavior-test :as user-test]
              [qq.browser.final-qa-test :as final-test]
-             [qq.browser.shell-functionality-test :as shell-test])  ; Full shell experience test
+             [qq.browser.shell-functionality-test :as shell-test]
+             [qq.browser.automated-typing-test :as auto-type-test]
+             [qq.browser.sendkeys-test :as sendkeys-test]
+             [qq.browser.improved-sendkeys-test :as improved-sendkeys-test]
+             [qq.browser.etaoin-direct-test :as etaoin-direct-test]
+             [qq.browser.etaoin-websocket-test :as etaoin-ws-test]
+             [qq.browser.manual-typing-debug :as manual-debug])  ; Manual typing debug test
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -243,6 +249,24 @@
   
   test-shell-functionality {:doc "🐚 Test full shell experience (backspace, arrows, ctrl shortcuts, history)"
                             :task (shell-test/test-shell-functionality)}
+  
+  test-automated-typing {:doc "⌨️ Test automated typing using multiple approaches (etaoin, sendkeys, AppleScript)"
+                         :task (auto-type-test/test-automated-typing)}
+  
+  test-sendkeys {:doc "🎯 Test real typing using sendkeys utility (system-level automation)"
+                 :task (sendkeys-test/test-sendkeys-typing)}
+  
+  test-improved-sendkeys {:doc "🚀 Improved sendkeys test with better focus handling"
+                          :task (improved-sendkeys-test/test-improved-sendkeys)}
+  
+  test-etaoin-direct {:doc "🎯 Direct etaoin test using JavaScript event simulation (most reliable)"
+                      :task (etaoin-direct-test/test-etaoin-direct-typing)}
+  
+  test-etaoin-websocket {:doc "🚀 MOST CONVENIENT: Etaoin + direct WebSocket messaging (perfect balance)"
+                         :task (etaoin-ws-test/test-etaoin-websocket)}
+  
+  debug-manual-typing {:doc "🔍 Debug manual typing Enter key issue with logging"
+                       :task (manual-debug/test-manual-typing-debug)}
   
   ;; 🧪 Complete Q&A Flow Testing
   test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"

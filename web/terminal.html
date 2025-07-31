@@ -440,10 +440,11 @@
                     // Show processing indicator
                     terminal.write('⏳ Processing...\\r\\n');
                 } else {
-                    // Empty command, just show new prompt
+                    // Empty command, just show new prompt immediately
                     terminal.write('$ ');
                 }
                 
+                // Always reset input buffer and cursor position after Enter
                 inputBuffer = '';
                 cursorPosition = 0;
             } else if (data === '\\u007f') {
