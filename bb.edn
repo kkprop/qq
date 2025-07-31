@@ -22,7 +22,8 @@
              [qq.browser.input-test :as input-test]
              [qq.browser.qa-flow-test :as browser-qa-test]
              [qq.browser.direct-websocket-test :as direct-ws-test]
-             [qq.browser.user-behavior-test :as user-test])  ; Real user behavior simulation
+             [qq.browser.user-behavior-test :as user-test]
+             [qq.browser.final-qa-test :as final-test])  ; Final Q&A completion test
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -235,6 +236,9 @@
   
   test-user-behavior {:doc "🎯 Test real user behavior simulation (typing + Enter)"
                       :task (user-test/test-user-behavior)}
+  
+  test-final-qa {:doc "🚀 FINAL Q&A TEST - Complete end-to-end flow"
+                 :task (final-test/test-final-qa)}
   
   ;; 🧪 Complete Q&A Flow Testing
   test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"
