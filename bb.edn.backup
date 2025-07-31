@@ -16,7 +16,8 @@
              [qq.browser.testing :as browser-testing]
              [qq.terminal.server :as terminal-server]
              [qq.terminal.bridge :as terminal-bridge]
-             [qq.terminal.working-websocket-stub :as working-ws]
+             [qq.terminal.working-websocket :as working-ws]
+             [qq.terminal.simple-websocket :as simple-ws]
              [qq.terminal.qa-flow-test :as qa-test])  ; Only working implementations
   
   ;; Development tasks
@@ -214,17 +215,24 @@
   list-terminal-sessions {:doc "📋 List all terminal Q sessions"
                           :task (terminal-bridge/list-all-sessions)}
   
-  ;; 🔧 QA-Tested WebSocket Server (Proven Working Implementation)
-  start-working-server {:doc "🚀 Start QA-tested WebSocket server with Q&A flow"
+  ;; 🔧 Simple WebSocket Server (Emergency Working Version)
+  start-simple-websocket {:doc "🚀 Start simple WebSocket server (emergency version)"
+                          :task (simple-ws/start-simple-websocket-server 9091)}
+  
+  stop-simple-websocket {:doc "🛑 Stop simple WebSocket server"
+                         :task (simple-ws/stop-simple-websocket-server)}
+  
+  ;; 🔧 Working WebSocket Server (Simple & Reliable) 
+  start-working-server {:doc "🚀 Start working WebSocket server with Q&A flow"
                         :task (working-ws/start-working-server 9091)}
   
-  start-persistent-server {:doc "🔄 Start persistent QA-tested WebSocket server"
+  start-persistent-server {:doc "🔄 Start persistent WebSocket server (keeps running)"
                            :task (working-ws/start-working-server-persistent 9091)}
   
-  stop-working-server {:doc "🛑 Stop QA-tested WebSocket server"
+  stop-working-server {:doc "🛑 Stop working WebSocket server"
                        :task (working-ws/stop-working-server)}
   
-  working-server-status {:doc "📊 Get QA-tested server status"
+  working-server-status {:doc "📊 Get working server status"
                          :task (working-ws/server-status)}
   
   ;; 🔄 Q&A Flow Testing

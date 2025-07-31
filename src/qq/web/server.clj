@@ -80,6 +80,7 @@
                 <div class=\"actions\">
                     <button class=\"btn btn-success\" onclick=\"createSession()\">Create New Session</button>
                     <button class=\"btn btn-info\" onclick=\"location.reload()\">Refresh</button>
+                    <button class=\"btn btn-primary\" onclick=\"window.open('/web/terminal.html', '_blank')\">Open Terminal</button>
                 </div>
             </section>
             

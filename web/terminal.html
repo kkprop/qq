@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ Terminal - Interactive Q Sessions</title>
+    
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        .terminal-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1e1e1e;
+        }
+        
+        .terminal-header {
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #404040;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .session-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff00;
+        }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control-btn {
+            background: #404040;
+            border: none;
+            color: #ffffff;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .control-btn:hover {
+            background: #505050;
+        }
+        
+        .terminal-wrapper {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 8px;
+        }
+        
+        #terminal {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .connection-status {
+            position: absolute;
+            top: 50px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #ffffff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        .status-connected { color: #00ff00; }
+        .status-connecting { color: #ffff00; }
+        .status-disconnected { color: #ff0000; }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="session-info">
+                <div class="session-status" id="sessionStatus"></div>
+                <span id="sessionName">Q Session Terminal</span>
+                <span id="sessionDetails">Ready to connect...</span>
+            </div>
+            <div class="terminal-controls">
+                <button class="control-btn" onclick="terminal.clear()">Clear</button>
+                <button class="control-btn" onclick="reconnectWebSocket()">Reconnect</button>
+                <button class="control-btn" onclick="window.open('/web/dashboard.html', '_blank')">Dashboard</button>
+            </div>
+        </div>
+        
+        <div class="connection-status" id="connectionStatus">
+            <span id="statusText">Initializing...</span>
+        </div>
+        
+        <div class="terminal-wrapper">
+            <div id="terminal"></div>
+        </div>
+    </div>
+
+    <!-- xterm.js JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+
+    <script>
+        // Terminal setup
+        const terminal = new Terminal({
+            cursorBlink: true,
+            cursorStyle: 'block',
+            fontSize: 14,
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            theme: {
+                background: '#1e1e1e',
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                selection: '#404040',
+                black: '#000000',
+                red: '#ff5555',
+                green: '#50fa7b',
+                yellow: '#f1fa8c',
+                blue: '#bd93f9',
+                magenta: '#ff79c6',
+                cyan: '#8be9fd',
+                white: '#f8f8f2',
+                brightBlack: '#44475a',
+                brightRed: '#ff5555',
+                brightGreen: '#50fa7b',
+                brightYellow: '#f1fa8c',
+                brightBlue: '#bd93f9',
+                brightMagenta: '#ff79c6',
+                brightCyan: '#8be9fd',
+                brightWhite: '#ffffff'
+            },
+            allowTransparency: false,
+            convertEol: true,
+            scrollback: 1000
+        });
+
+        // Add-ons
+        const fitAddon = new FitAddon.FitAddon();
+        const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+        
+        terminal.loadAddon(fitAddon);
+        terminal.loadAddon(webLinksAddon);
+
+        // Mount terminal
+        terminal.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        // WebSocket connection
+        let ws = null;
+        let currentSessionId = null;
+        let inputBuffer = '';
+
+        function updateConnectionStatus(status, message) {
+            const statusElement = document.getElementById('statusText');
+            const statusContainer = document.getElementById('connectionStatus');
+            
+            statusElement.textContent = message;
+            statusContainer.className = 'connection-status status-' + status;
+            
+            const sessionStatus = document.getElementById('sessionStatus');
+            sessionStatus.style.background = status === 'connected' ? '#00ff00' : 
+                                           status === 'connecting' ? '#ffff00' : '#ff0000';
+        }
+
+        function connectWebSocket() {
+            updateConnectionStatus('connecting', 'Connecting...');
+            
+            // Get session ID from URL params or use default
+            const urlParams = new URLSearchParams(window.location.search);
+            currentSessionId = urlParams.get('session') || 'default';
+            
+            document.getElementById('sessionName').textContent = `Q Session: ${currentSessionId}`;
+            
+            try {
+                ws = new WebSocket(`ws://localhost:9091/terminal/${currentSessionId}`);
+                
+                ws.onopen = function() {
+                    updateConnectionStatus('connected', 'Connected');
+                    document.getElementById('sessionDetails').textContent = `Connected to ${currentSessionId}`;
+                    
+                    // Send welcome message
+                    terminal.writeln('🤖 QQ Terminal Connected!');
+                    terminal.writeln('=====================================');
+                    terminal.writeln(`📡 Session: ${currentSessionId}`);
+                    terminal.writeln('🎯 Type Q commands and see real-time responses');
+                    terminal.writeln('💡 Use Ctrl+C to interrupt, Ctrl+D to exit');
+                    terminal.writeln('');
+                    terminal.write('$ ');
+                };
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    
+                    switch(data.type) {
+                        case 'output':
+                            terminal.write(data.content);
+                            break;
+                        case 'prompt':
+                            terminal.write(data.content);
+                            break;
+                        case 'clear':
+                            terminal.clear();
+                            break;
+                        case 'session_info':
+                            document.getElementById('sessionDetails').textContent = data.info;
+                            break;
+                    }
+                };
+                
+                ws.onclose = function() {
+                    updateConnectionStatus('disconnected', 'Disconnected');
+                    document.getElementById('sessionDetails').textContent = 'Connection lost';
+                    
+                    terminal.writeln('\\r\\n🔌 Connection lost. Attempting to reconnect...');
+                    
+                    // Auto-reconnect after 3 seconds
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                ws.onerror = function(error) {
+                    updateConnectionStatus('disconnected', 'Connection error');
+                    console.error('WebSocket error:', error);
+                };
+                
+            } catch (error) {
+                updateConnectionStatus('disconnected', 'Failed to connect');
+                console.error('Failed to create WebSocket:', error);
+            }
+        }
+
+        function reconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+            connectWebSocket();
+        }
+
+        // Terminal input handling
+        terminal.onData(function(data) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                terminal.write('\\r\\n❌ Not connected to session\\r\\n$ ');
+                return;
+            }
+            
+            // Handle special keys
+            if (data === '\\r') {
+                // Enter key - send command
+                terminal.write('\\r\\n');
+                
+                if (inputBuffer.trim()) {
+                    ws.send(JSON.stringify({
+                        type: 'command',
+                        content: inputBuffer.trim(),
+                        session: currentSessionId
+                    }));
+                }
+                
+                inputBuffer = '';
+            } else if (data === '\\u007f') {
+                // Backspace
+                if (inputBuffer.length > 0) {
+                    inputBuffer = inputBuffer.slice(0, -1);
+                    terminal.write('\\b \\b');
+                }
+            } else if (data === '\\u0003') {
+                // Ctrl+C
+                ws.send(JSON.stringify({
+                    type: 'interrupt',
+                    session: currentSessionId
+                }));
+                terminal.write('^C\\r\\n$ ');
+                inputBuffer = '';
+            } else if (data === '\\u0004') {
+                // Ctrl+D
+                ws.send(JSON.stringify({
+                    type: 'eof',
+                    session: currentSessionId
+                }));
+            } else {
+                // Regular character
+                inputBuffer += data;
+                terminal.write(data);
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            fitAddon.fit();
+        });
+
+        // Initialize connection
+        connectWebSocket();
+
+        // Welcome message
+        console.log('🤖 QQ Terminal initialized');
+        console.log('📡 WebSocket will connect to ws://localhost:9091/terminal/');
+        console.log('🎯 Ready for interactive Q sessions!');
+    </script>
+</body>
+</html>

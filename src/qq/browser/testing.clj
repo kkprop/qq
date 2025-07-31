@@ -249,6 +249,65 @@
           :button-found false
           :error "Create Session button not found"})))))
 
+(defn test-terminal-interface
+  "🖥️ Test the browser-based terminal interface
+  
+  Tests the complete terminal experience:
+  - Terminal page loading
+  - WebSocket connection
+  - Command input/output
+  - Q session integration
+  
+  Args:
+    driver - Etaoin driver instance (optional)
+    
+  Returns:
+    Test results map
+    
+  Example:
+    (test-terminal-interface)"
+  ([]
+   (let [driver (e/chrome {:headless false})]
+     (try
+       (test-terminal-interface driver)
+       (finally
+         (Thread/sleep 5000) ; Keep open for inspection
+         (e/quit driver)))))
+  ([driver]
+   (println "🖥️ TESTING TERMINAL INTERFACE")
+   (println "==============================")
+   
+   ;; Navigate to terminal
+   (e/go driver "http://localhost:9090/web/terminal.html")
+   (Thread/sleep 5000) ; Wait for WebSocket connection
+   
+   ;; Take screenshot
+   (capture-screenshot driver "terminal-interface")
+   
+   ;; Check if terminal loaded
+   (let [terminal-exists (e/exists? driver {:css "#terminal"})
+         connection-status (e/get-element-text driver {:css "#statusText"})
+         session-name (e/get-element-text driver {:css "#sessionName"})]
+     
+     (println (str "🖥️ Terminal element exists: " terminal-exists))
+     (println (str "🔌 Connection status: " connection-status))
+     (println (str "📋 Session name: " session-name))
+     
+     ;; Test terminal interaction (if connected)
+     (let [test-results {:terminal-loaded terminal-exists
+                         :connection-status connection-status
+                         :session-name session-name
+                         :timestamp (java.time.Instant/now)}]
+       
+       (if (and terminal-exists (str/includes? connection-status "Connected"))
+         (do
+           (println "✅ Terminal interface test PASSED")
+           (assoc test-results :success true))
+         (do
+           (println "❌ Terminal interface test FAILED")
+           (assoc test-results :success false)))))))
+
+;; Add to existing functions
 (defn run-comprehensive-dashboard-test
   "🎯 Run comprehensive dashboard functionality test
   
