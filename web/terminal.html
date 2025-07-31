@@ -178,6 +178,9 @@
         let ws = null;
         let currentSessionId = null;
         let inputBuffer = '';
+        let cursorPosition = 0;
+        let commandHistory = [];
+        let historyIndex = -1;
 
         function updateConnectionStatus(status, message) {
             const statusElement = document.getElementById('statusText');
@@ -264,19 +267,150 @@
             connectWebSocket();
         }
 
-        // Terminal input handling
+        // Enhanced shell-like input handling with full keyboard shortcuts
+        
+        // Helper functions for cursor and display management
+        function updateDisplay() {
+            // Move to beginning of line, clear it, and redraw
+            terminal.write('\r');
+            terminal.write('\x1b[2K'); // Clear entire line
+            terminal.write('$ ' + inputBuffer);
+            
+            // Position cursor correctly
+            if (cursorPosition < inputBuffer.length) {
+                const moveBack = inputBuffer.length - cursorPosition;
+                for (let i = 0; i < moveBack; i++) {
+                    terminal.write('\x1b[D'); // Move cursor left one position
+                }
+            }
+        }
+
+        function moveCursorLeft() {
+            if (cursorPosition > 0) {
+                cursorPosition--;
+                terminal.write('\x1b[D'); // Move cursor left
+            }
+        }
+
+        function moveCursorRight() {
+            if (cursorPosition < inputBuffer.length) {
+                cursorPosition++;
+                terminal.write('\x1b[C'); // Move cursor right
+            }
+        }
+
+        function insertChar(char) {
+            inputBuffer = inputBuffer.slice(0, cursorPosition) + char + inputBuffer.slice(cursorPosition);
+            cursorPosition++;
+            updateDisplay();
+        }
+
+        function deleteChar() {
+            if (cursorPosition > 0) {
+                inputBuffer = inputBuffer.slice(0, cursorPosition - 1) + inputBuffer.slice(cursorPosition);
+                cursorPosition--;
+                updateDisplay();
+            }
+        }
+
+        function deleteForward() {
+            if (cursorPosition < inputBuffer.length) {
+                inputBuffer = inputBuffer.slice(0, cursorPosition) + inputBuffer.slice(cursorPosition + 1);
+                updateDisplay();
+            }
+        }
+
+        function moveToBeginning() {
+            cursorPosition = 0;
+            terminal.write('\r$ ');
+        }
+
+        function moveToEnd() {
+            cursorPosition = inputBuffer.length;
+            updateDisplay();
+        }
+
+        function killToEnd() {
+            inputBuffer = inputBuffer.slice(0, cursorPosition);
+            updateDisplay();
+        }
+
+        function killLine() {
+            inputBuffer = '';
+            cursorPosition = 0;
+            terminal.write('\r');
+            terminal.write('\x1b[2K'); // Clear entire line
+            terminal.write('$ ');
+        }
+
+        function previousHistory() {
+            if (commandHistory.length > 0) {
+                if (historyIndex === -1) {
+                    historyIndex = commandHistory.length - 1;
+                } else if (historyIndex > 0) {
+                    historyIndex--;
+                }
+                inputBuffer = commandHistory[historyIndex];
+                cursorPosition = inputBuffer.length;
+                updateDisplay();
+            }
+        }
+
+        function nextHistory() {
+            if (historyIndex !== -1) {
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    inputBuffer = commandHistory[historyIndex];
+                } else {
+                    historyIndex = -1;
+                    inputBuffer = '';
+                }
+                cursorPosition = inputBuffer.length;
+                updateDisplay();
+            }
+        }
+
+        // Enhanced terminal input handling with full shell shortcuts
         terminal.onData(function(data) {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 terminal.write('\\r\\n❌ Not connected to session\\r\\n$ ');
                 return;
             }
             
-            // Handle special keys
-            if (data === '\\r') {
+            const code = data.charCodeAt(0);
+            
+            // Handle special key sequences
+            if (data === '\\x1b[A') {
+                // Up arrow - previous command in history
+                previousHistory();
+            } else if (data === '\\x1b[B') {
+                // Down arrow - next command in history
+                nextHistory();
+            } else if (data === '\\x1b[C') {
+                // Right arrow - move cursor right
+                moveCursorRight();
+            } else if (data === '\\x1b[D') {
+                // Left arrow - move cursor left
+                moveCursorLeft();
+            } else if (data === '\\x1b[H' || data === '\\x1b[1~') {
+                // Home key - move to beginning
+                moveToBeginning();
+            } else if (data === '\\x1b[F' || data === '\\x1b[4~') {
+                // End key - move to end
+                moveToEnd();
+            } else if (data === '\\x1b[3~') {
+                // Delete key - delete character forward
+                deleteForward();
+            } else if (data === '\\r') {
                 // Enter key - send command
                 terminal.write('\\r\\n');
                 
                 if (inputBuffer.trim()) {
+                    // Add to history
+                    commandHistory.push(inputBuffer.trim());
+                    historyIndex = -1;
+                    
+                    // Send command
                     ws.send(JSON.stringify({
                         type: 'command',
                         content: inputBuffer.trim(),
@@ -285,31 +419,71 @@
                 }
                 
                 inputBuffer = '';
+                cursorPosition = 0;
             } else if (data === '\\u007f') {
                 // Backspace
-                if (inputBuffer.length > 0) {
-                    inputBuffer = inputBuffer.slice(0, -1);
-                    terminal.write('\\b \\b');
-                }
+                deleteChar();
+            } else if (data === '\\u0001') {
+                // Ctrl+A - beginning of line
+                moveToBeginning();
+            } else if (data === '\\u0002') {
+                // Ctrl+B - backward one character
+                moveCursorLeft();
             } else if (data === '\\u0003') {
-                // Ctrl+C
+                // Ctrl+C - interrupt
                 ws.send(JSON.stringify({
                     type: 'interrupt',
                     session: currentSessionId
                 }));
                 terminal.write('^C\\r\\n$ ');
                 inputBuffer = '';
+                cursorPosition = 0;
             } else if (data === '\\u0004') {
-                // Ctrl+D
-                ws.send(JSON.stringify({
-                    type: 'eof',
-                    session: currentSessionId
-                }));
-            } else {
-                // Regular character
-                inputBuffer += data;
-                terminal.write(data);
+                // Ctrl+D - EOF
+                if (inputBuffer === '') {
+                    ws.send(JSON.stringify({
+                        type: 'eof',
+                        session: currentSessionId
+                    }));
+                } else {
+                    deleteForward();
+                }
+            } else if (data === '\\u0005') {
+                // Ctrl+E - end of line
+                moveToEnd();
+            } else if (data === '\\u0006') {
+                // Ctrl+F - forward one character
+                moveCursorRight();
+            } else if (data === '\\u000b') {
+                // Ctrl+K - kill to end of line
+                killToEnd();
+            } else if (data === '\\u000c') {
+                // Ctrl+L - clear screen
+                terminal.clear();
+                terminal.write('$ ' + inputBuffer);
+                // Reposition cursor
+                if (cursorPosition < inputBuffer.length) {
+                    const moveBack = inputBuffer.length - cursorPosition;
+                    for (let i = 0; i < moveBack; i++) {
+                        terminal.write('\\x1b[D');
+                    }
+                }
+            } else if (data === '\\u0015') {
+                // Ctrl+U - kill entire line
+                killLine();
+            } else if (data === '\\u0017') {
+                // Ctrl+W - kill word backward
+                let pos = cursorPosition;
+                while (pos > 0 && inputBuffer[pos - 1] === ' ') pos--;
+                while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
+                inputBuffer = inputBuffer.slice(0, pos) + inputBuffer.slice(cursorPosition);
+                cursorPosition = pos;
+                updateDisplay();
+            } else if (code >= 32 && code < 127) {
+                // Regular printable character
+                insertChar(data);
             }
+            // Ignore other control characters
         });
 
         // Handle window resize

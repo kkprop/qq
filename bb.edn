@@ -23,7 +23,8 @@
              [qq.browser.qa-flow-test :as browser-qa-test]
              [qq.browser.direct-websocket-test :as direct-ws-test]
              [qq.browser.user-behavior-test :as user-test]
-             [qq.browser.final-qa-test :as final-test])  ; Final Q&A completion test
+             [qq.browser.final-qa-test :as final-test]
+             [qq.browser.shell-functionality-test :as shell-test])  ; Full shell experience test
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -239,6 +240,9 @@
   
   test-final-qa {:doc "🚀 FINAL Q&A TEST - Complete end-to-end flow"
                  :task (final-test/test-final-qa)}
+  
+  test-shell-functionality {:doc "🐚 Test full shell experience (backspace, arrows, ctrl shortcuts, history)"
+                            :task (shell-test/test-shell-functionality)}
   
   ;; 🧪 Complete Q&A Flow Testing
   test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"
