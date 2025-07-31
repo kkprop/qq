@@ -6,7 +6,8 @@
             [babashka.process :as p]
             [qq.core :as core]
             [qq.monitor :as monitor]
-            [qq.tmux :as tmux]))
+            [qq.tmux :as tmux]
+            [qq.session.manager :as session-mgr]))  ; Add real session management
 
 ;; Server configuration
 (def ^:private DEFAULT-PORT 9090)
@@ -55,7 +56,7 @@
                         "<div class=\"empty-state\">
                            <h3>No Active Sessions</h3>
                            <p>Create your first Q session to get started!</p>
-                           <button class=\"btn btn-success\" onclick=\"alert('Session creation coming soon!')\">Create Session</button>
+                           <button class=\"btn btn-success\" onclick=\"createSession()\">Create Session</button>
                          </div>"
                         (str/join "\n" 
                           (map (fn [session]
@@ -77,7 +78,7 @@
                 </div>
                 
                 <div class=\"actions\">
-                    <button class=\"btn btn-success\" onclick=\"alert('Create session coming soon!')\">Create New Session</button>
+                    <button class=\"btn btn-success\" onclick=\"createSession()\">Create New Session</button>
                     <button class=\"btn btn-info\" onclick=\"location.reload()\">Refresh</button>
                 </div>
             </section>

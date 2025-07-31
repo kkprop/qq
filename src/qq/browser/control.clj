@@ -553,3 +553,94 @@
       (extract-browser-debug-info driver)
       (finally
         (e/quit driver)))))
+
+(defn phase1-dashboard-testing
+  "Phase 1: Comprehensive dashboard functionality testing"
+  []
+  (println "🎯 PHASE 1: DASHBOARD FUNCTIONALITY TESTING")
+  (println "===========================================")
+  
+  (let [driver (start-browser)]
+    (try
+      ;; Navigate to dashboard
+      (e/go driver DASHBOARD-URL)
+      (Thread/sleep 3000)
+      
+      (println "📸 Taking initial screenshot...")
+      (take-screenshot driver "phase1-initial")
+      
+      ;; Test 1: Create Session Button
+      (println "\n🧪 Test 1: Create Session Button")
+      (println "=================================")
+      (if (e/exists? driver {:css ".btn-success"})
+        (do
+          (println "✅ Create Session button found")
+          
+          ;; Override prompt for automated testing
+          (e/js-execute driver "
+            window.originalPrompt = window.prompt;
+            window.prompt = function(message) {
+              console.log('Automated prompt:', message);
+              return 'phase1-test-session';
+            };
+          ")
+          
+          (println "🖱️  Clicking Create Session button...")
+          (e/click driver {:css ".btn-success"})
+          (Thread/sleep 3000)
+          
+          ;; Check console logs
+          (println "📋 Console logs:")
+          (let [logs (e/get-logs driver :browser)]
+            (doseq [log (take 5 logs)]
+              (println (str "  " (:level log) ": " (:message log)))))
+          
+          (println "✅ Create Session button test completed"))
+        (println "❌ Create Session button not found"))
+      
+      ;; Test 2: Session Listing
+      (println "\n🧪 Test 2: Session Listing")
+      (println "===========================")
+      (let [api-result (e/js-execute driver "
+        return fetch('/api/sessions')
+          .then(r => r.json())
+          .then(data => ({
+            success: true,
+            count: data.length,
+            sessions: data.map(s => s.name)
+          }))
+          .catch(e => ({
+            success: false,
+            error: e.message
+          }));")]
+        
+        (println (str "📊 API result: " api-result))
+        (if (get api-result :success)
+          (println (str "✅ Sessions API working - " (get api-result :count) " sessions"))
+          (println (str "❌ Sessions API failed: " (get api-result :error)))))
+      
+      ;; Test 3: UI Elements
+      (println "\n🧪 Test 3: UI Elements")
+      (println "=======================")
+      (let [elements [".container" ".sessions-grid" ".btn-success" ".system-info"]]
+        (doseq [element elements]
+          (let [exists (e/exists? driver {:css element})]
+            (println (str "👁️  " element " exists: " exists)))))
+      
+      (println "📸 Taking final screenshot...")
+      (take-screenshot driver "phase1-final")
+      
+      (println "\n🎉 PHASE 1 TESTING COMPLETED!")
+      (println "==============================")
+      (println "📸 Screenshots saved: phase1-initial.png, phase1-final.png")
+      
+      ;; Keep browser open for inspection
+      (println "\n⏸️  Browser will stay open for 15 seconds...")
+      (Thread/sleep 15000)
+      
+      (catch Exception e
+        (println (str "❌ Error during Phase 1 testing: " (.getMessage e)))
+        (take-screenshot driver "phase1-error"))
+      (finally
+        (e/quit driver)
+        (println "✅ Phase 1 testing session ended")))))

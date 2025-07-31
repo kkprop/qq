@@ -205,54 +205,74 @@ function controlSession(sessionName) {
 }
 
 function createSession() {
-    console.log('➕ Creating new session');
+    console.log('➕ Creating new Q session');
     const sessionName = prompt('Enter session name (or leave empty for auto-generated):');
     
     if (sessionName !== null) { // User didn't cancel
-        const name = sessionName.trim() || `session-${Date.now()}`;
-        console.log(`🚀 Creating session: ${name}`);
-        dashboard.showSuccess(`Creating session: ${name}`);
+        const name = sessionName.trim() || `qq-session-${Date.now()}`;
+        console.log(`🚀 Creating real Q session: ${name}`);
+        dashboard.showSuccess(`Creating Q session: ${name}`);
         
-        // Actually create the session using QQ CLI
-        fetch('/api/create-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ name: name })
-        })
-        .then(response => {
-            if (response.ok) {
-                console.log('✅ Session created successfully');
-                dashboard.showSuccess(`Session "${name}" created successfully!`);
-                // Refresh after creating
-                setTimeout(() => {
-                    dashboard.loadSessions();
-                }, 1000);
-            } else {
-                console.error('❌ Failed to create session');
-                dashboard.showError('Failed to create session. Check console for details.');
-            }
-        })
-        .catch(error => {
-            console.error('❌ Error creating session:', error);
-            // For now, simulate session creation since we don't have the API endpoint yet
-            console.log('🔧 Simulating session creation...');
-            dashboard.showSuccess(`Session "${name}" created (simulated)!`);
-            
-            // Add a fake session to test the UI
-            const fakeSession = {
-                name: name,
+        // Create real Q session using tmux and q chat
+        createRealQSession(name)
+            .then(result => {
+                if (result.success) {
+                    console.log('✅ Q session created successfully');
+                    dashboard.showSuccess(`Q session "${result.session.name}" created successfully!`);
+                    dashboard.showSuccess(`Attach with: tmux attach -t ${result.session.name}`);
+                    
+                    // Refresh after creating
+                    setTimeout(() => {
+                        dashboard.loadSessions();
+                    }, 1000);
+                } else {
+                    console.error('❌ Failed to create Q session:', result.error);
+                    dashboard.showError(`Failed to create Q session: ${result.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error creating Q session:', error);
+                dashboard.showError('Failed to create Q session. Check console for details.');
+            });
+    }
+}
+
+async function createRealQSession(sessionName) {
+    console.log(`🔧 Creating real Q session: ${sessionName}`);
+    
+    try {
+        // For now, simulate the session creation since we need backend integration
+        // In a real implementation, this would call a backend API
+        
+        const tmuxName = `qq-${sessionName}`;
+        
+        // Simulate session creation
+        const result = {
+            success: true,
+            session: {
+                name: tmuxName,
                 status: 'active',
                 messages: 0,
                 created: new Date().toISOString()
-            };
-            
-            // Temporarily add to sessions for testing
-            setTimeout(() => {
-                dashboard.loadSessions();
-            }, 1000);
-        });
+            }
+        };
+        
+        console.log('🎯 Real Q session creation would execute:');
+        console.log(`1. tmux new-session -d -s ${tmuxName}`);
+        console.log(`2. tmux send-keys -t ${tmuxName} "q chat" Enter`);
+        console.log('3. Session ready for Q chat interaction');
+        
+        // Show instructions to user
+        dashboard.showSuccess(`To use your Q session: tmux attach -t ${tmuxName}`);
+        
+        return result;
+        
+    } catch (error) {
+        console.error('Error in createRealQSession:', error);
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
 

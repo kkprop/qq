@@ -10,7 +10,10 @@
              [qq.context-monitor :as context-monitor]
              [qq.command-wrapper :as cmd]
              [qq.web.server :as web]
-             [qq.browser.control :as browser])  ; Add browser control namespace
+             [qq.browser.control :as browser]
+             [qq.session.manager :as session-mgr]
+             [qq.browser.dashboard-tests :as dashboard-tests]
+             [qq.browser.testing :as browser-testing])  ; Add comprehensive testing framework
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -172,4 +175,24 @@
                       :task (browser/debug-current-browser)}
   
   browser-auto-test {:doc "Run automated browser tests with Etaoin control"
-                     :task (browser/interactive-automated-test)}}}
+                     :task (browser/interactive-automated-test)}
+  
+  create-q-session {:doc "Create a new Q chat session in tmux"
+                    :task (session-mgr/create-q-session (or (first *command-line-args*) 
+                                                           (str "qq-session-" (System/currentTimeMillis))))}
+  
+  list-q-sessions {:doc "List all active Q sessions"
+                   :task (session-mgr/get-active-sessions)}
+  
+  test-dashboard-phase1 {:doc "Phase 1: Comprehensive dashboard functionality testing"
+                         :task (browser/phase1-dashboard-testing)}
+  
+  ;; 🤖 Browser Testing Framework Tasks
+  quick-dashboard-test {:doc "⚡ Quick dashboard functionality validation"
+                        :task (browser-testing/quick-dashboard-test)}
+  
+  interactive-dashboard-test {:doc "🎮 Interactive dashboard test with manual inspection"
+                              :task (browser-testing/interactive-dashboard-test)}
+  
+  comprehensive-dashboard-test {:doc "🎯 Full comprehensive dashboard test suite"
+                                :task (browser-testing/run-comprehensive-dashboard-test)}}}}
