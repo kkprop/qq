@@ -222,19 +222,39 @@
                 
                 ws.onmessage = function(event) {
                     const data = JSON.parse(event.data);
+                    console.log('WebSocket message received:', data);
                     
                     switch(data.type) {
                         case 'output':
+                            // Write the content
                             terminal.write(data.content);
+                            
+                            // Always add newline and prompt - keep it simple
+                            terminal.write('\\r\\n$ ');
+                            console.log('Prompt added after output');
+                            break;
+                        case 'error':
+                            terminal.write('❌ Error: ' + data.content);
+                            terminal.write('\\r\\n$ ');
                             break;
                         case 'prompt':
                             terminal.write(data.content);
                             break;
                         case 'clear':
                             terminal.clear();
+                            terminal.write('$ ');
                             break;
                         case 'session_info':
                             document.getElementById('sessionDetails').textContent = data.info;
+                            break;
+                        case 'welcome':
+                            terminal.write(data.content + '\\r\\n$ ');
+                            break;
+                        case 'pong':
+                            // Handle pong silently
+                            break;
+                        default:
+                            console.log('Unknown message type:', data.type, data);
                             break;
                     }
                 };
@@ -416,6 +436,12 @@
                         content: inputBuffer.trim(),
                         session: currentSessionId
                     }));
+                    
+                    // Show processing indicator
+                    terminal.write('⏳ Processing...\\r\\n');
+                } else {
+                    // Empty command, just show new prompt
+                    terminal.write('$ ');
                 }
                 
                 inputBuffer = '';
