@@ -32,10 +32,9 @@
   "Read a WebSocket frame and return the payload as string"
   (try
     ;; Check if data is available before attempting to read
-    (when (> (.available input-stream) 0)
+    (when (and (> (.available input-stream) 0))
       (println (str "🔍 Data available [" connection-id "], attempting to read WebSocket frame..."))
       (let [first-byte (.read input-stream)]
-        (println (str "🔍 First byte [" connection-id "]: " first-byte))
         (when (>= first-byte 0)
           (let [second-byte (.read input-stream)
                 payload-length (bit-and second-byte 0x7F)
@@ -48,16 +47,14 @@
             (cond
               (= opcode 1) ; Text frame
               (when (and masked? (> payload-length 0))
-                (println (str "🔍 Reading TEXT frame [" connection-id "] with mask..."))
+                (println (str "🎉 Reading TEXT frame [" connection-id "] with mask..."))
                 ;; Read mask key
                 (let [mask-key (byte-array 4)]
                   (.read input-stream mask-key)
-                  (println (str "🔍 Mask key [" connection-id "] read: " (vec mask-key)))
                   
                   ;; Read payload
                   (let [payload (byte-array payload-length)]
                     (.read input-stream payload)
-                    (println (str "🔍 Raw payload [" connection-id "] read: " (vec payload)))
                     
                     ;; Unmask payload
                     (dotimes [i payload-length]
@@ -72,21 +69,57 @@
               (= opcode 8) ; Close frame
               (do
                 (println (str "🔍 Received CLOSE frame [" connection-id "] - connection closing"))
+                ;; Read close payload if present
+                (when (> payload-length 0)
+                  (if masked?
+                    (let [mask-key (byte-array 4)
+                          payload (byte-array payload-length)]
+                      (.read input-stream mask-key)
+                      (.read input-stream payload))
+                    (let [payload (byte-array payload-length)]
+                      (.read input-stream payload))))
                 nil)
               
               (= opcode 9) ; Ping frame
               (do
                 (println (str "🔍 Received PING frame [" connection-id "] - should send PONG"))
+                ;; Read ping payload if present
+                (when (> payload-length 0)
+                  (if masked?
+                    (let [mask-key (byte-array 4)
+                          payload (byte-array payload-length)]
+                      (.read input-stream mask-key)
+                      (.read input-stream payload))
+                    (let [payload (byte-array payload-length)]
+                      (.read input-stream payload))))
                 nil)
               
               (= opcode 10) ; Pong frame
               (do
                 (println (str "🔍 Received PONG frame [" connection-id "] - keepalive"))
+                ;; Read pong payload if present
+                (when (> payload-length 0)
+                  (if masked?
+                    (let [mask-key (byte-array 4)
+                          payload (byte-array payload-length)]
+                      (.read input-stream mask-key)
+                      (.read input-stream payload))
+                    (let [payload (byte-array payload-length)]
+                      (.read input-stream payload))))
                 nil)
               
               :else
               (do
                 (println (str "🔍 Received unknown frame type [" connection-id "]: opcode=" opcode))
+                ;; Read unknown payload to prevent stream corruption
+                (when (> payload-length 0)
+                  (if masked?
+                    (let [mask-key (byte-array 4)
+                          payload (byte-array payload-length)]
+                      (.read input-stream mask-key)
+                      (.read input-stream payload))
+                    (let [payload (byte-array payload-length)]
+                      (.read input-stream payload))))
                 nil))))))
     (catch Exception e
       (println (str "❌ Error reading WebSocket frame [" connection-id "]: " (.getMessage e)))
@@ -174,27 +207,24 @@
                     (do
                       (println (str "🔑 WebSocket key [" connection-id "]: " websocket-key))
                       
-                      ;; Send WebSocket handshake response
+                      ;; Send proper WebSocket handshake response
                       (.println writer "HTTP/1.1 101 Switching Protocols")
                       (.println writer "Upgrade: websocket")
                       (.println writer "Connection: Upgrade")
                       (.println writer (str "Sec-WebSocket-Accept: " (websocket-accept-key websocket-key)))
+                      (.println writer "Sec-WebSocket-Version: 13")
                       (.println writer "")
                       (.flush writer)
                       
                       (println (str "✅ WebSocket handshake completed [" connection-id "]"))
                       
-                      ;; Don't send welcome message immediately - let connection stabilize
-                      ;; (send-websocket-frame (.getOutputStream client-socket)
-                      ;;   (json/write-str {:type "welcome" :content "🚀 THE WebSocket server ready for Q&A!"}))
-                      
-                      ;; Process WebSocket messages
+                      ;; Process WebSocket messages with proper binary I/O
                       (println (str "🔄 Starting WebSocket message processing [" connection-id "]..."))
                       (let [input-stream (.getInputStream client-socket)
                             output-stream (.getOutputStream client-socket)]
                         
                         (println (str "🔄 Entering message processing loop [" connection-id "]..."))
-                        (while (.isConnected client-socket)
+                        (while (and (.isConnected client-socket) (not (.isClosed client-socket)))
                           (when-let [message (read-websocket-frame input-stream connection-id)]
                             (println (str "📨 Processing WebSocket message [" connection-id "]: " message))
                             
@@ -204,7 +234,9 @@
                               (send-websocket-frame output-stream (json/write-str response))))
                           
                           ;; Small delay to prevent busy waiting
-                          (Thread/sleep 100))))
+                          (Thread/sleep 100))
+                        
+                        (println (str "🔌 Message processing loop ended [" connection-id "]"))))
                     
                     (do
                       (println (str "❌ No WebSocket key found [" connection-id "]"))
