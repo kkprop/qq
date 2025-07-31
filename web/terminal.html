@@ -221,41 +221,53 @@
                 };
                 
                 ws.onmessage = function(event) {
-                    const data = JSON.parse(event.data);
-                    console.log('WebSocket message received:', data);
-                    
-                    switch(data.type) {
-                        case 'output':
-                            // Write the content
-                            terminal.write(data.content);
-                            
-                            // Always add newline and prompt - keep it simple
-                            terminal.write('\\r\\n$ ');
-                            console.log('Prompt added after output');
-                            break;
-                        case 'error':
-                            terminal.write('❌ Error: ' + data.content);
-                            terminal.write('\\r\\n$ ');
-                            break;
-                        case 'prompt':
-                            terminal.write(data.content);
-                            break;
-                        case 'clear':
-                            terminal.clear();
-                            terminal.write('$ ');
-                            break;
-                        case 'session_info':
-                            document.getElementById('sessionDetails').textContent = data.info;
-                            break;
-                        case 'welcome':
-                            terminal.write(data.content + '\\r\\n$ ');
-                            break;
-                        case 'pong':
-                            // Handle pong silently
-                            break;
-                        default:
-                            console.log('Unknown message type:', data.type, data);
-                            break;
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('WebSocket message received:', data);
+                        
+                        switch(data.type) {
+                            case 'output':
+                                // Write content safely to avoid parsing errors
+                                if (data.content) {
+                                    terminal.write(data.content);
+                                    // Always add newline and prompt with standard sequences
+                                    terminal.write('\r\n$ ');
+                                }
+                                console.log('Prompt added after output');
+                                break;
+                            case 'error':
+                                terminal.write('❌ Error: ' + (data.content || 'Unknown error'));
+                                terminal.write('\r\n$ ');
+                                break;
+                            case 'prompt':
+                                if (data.content) {
+                                    terminal.write(data.content);
+                                }
+                                break;
+                            case 'clear':
+                                terminal.clear();
+                                terminal.write('$ ');
+                                break;
+                            case 'session_info':
+                                const sessionElement = document.getElementById('sessionDetails');
+                                if (sessionElement && data.info) {
+                                    sessionElement.textContent = data.info;
+                                }
+                                break;
+                            case 'welcome':
+                                if (data.content) {
+                                    terminal.write(data.content + '\r\n$ ');
+                                }
+                                break;
+                            case 'pong':
+                                // Handle pong silently
+                                break;
+                            default:
+                                console.log('Unknown message type:', data.type, data);
+                                break;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error, event.data);
                     }
                 };
                 
@@ -291,31 +303,30 @@
         
         // Helper functions for cursor and display management
         function updateDisplay() {
-            // Move to beginning of line, clear it, and redraw
-            terminal.write('\r');
-            terminal.write('\x1b[2K'); // Clear entire line
+            // Use simple, reliable terminal operations
+            terminal.write('\r'); // Move to beginning of line
+            terminal.write('\x1b[2K'); // Clear entire line (standard ANSI)
             terminal.write('$ ' + inputBuffer);
             
-            // Position cursor correctly
+            // Position cursor correctly using standard method
             if (cursorPosition < inputBuffer.length) {
                 const moveBack = inputBuffer.length - cursorPosition;
-                for (let i = 0; i < moveBack; i++) {
-                    terminal.write('\x1b[D'); // Move cursor left one position
-                }
+                // Use simple cursor movement
+                terminal.write('\x1b[' + moveBack + 'D');
             }
         }
 
         function moveCursorLeft() {
             if (cursorPosition > 0) {
                 cursorPosition--;
-                terminal.write('\x1b[D'); // Move cursor left
+                terminal.write('\x1b[D'); // Standard cursor left
             }
         }
 
         function moveCursorRight() {
             if (cursorPosition < inputBuffer.length) {
                 cursorPosition++;
-                terminal.write('\x1b[C'); // Move cursor right
+                terminal.write('\x1b[C'); // Standard cursor right
             }
         }
 
@@ -359,7 +370,7 @@
             inputBuffer = '';
             cursorPosition = 0;
             terminal.write('\r');
-            terminal.write('\x1b[2K'); // Clear entire line
+            terminal.write('\x1b[2K'); // Standard clear line
             terminal.write('$ ');
         }
 
@@ -390,127 +401,145 @@
             }
         }
 
-        // Enhanced terminal input handling with full shell shortcuts
+        // Enhanced terminal input handling with error prevention
         terminal.onData(function(data) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                terminal.write('\\r\\n❌ Not connected to session\\r\\n$ ');
-                return;
-            }
-            
-            const code = data.charCodeAt(0);
-            
-            // Handle special key sequences
-            if (data === '\\x1b[A') {
-                // Up arrow - previous command in history
-                previousHistory();
-            } else if (data === '\\x1b[B') {
-                // Down arrow - next command in history
-                nextHistory();
-            } else if (data === '\\x1b[C') {
-                // Right arrow - move cursor right
-                moveCursorRight();
-            } else if (data === '\\x1b[D') {
-                // Left arrow - move cursor left
-                moveCursorLeft();
-            } else if (data === '\\x1b[H' || data === '\\x1b[1~') {
-                // Home key - move to beginning
-                moveToBeginning();
-            } else if (data === '\\x1b[F' || data === '\\x1b[4~') {
-                // End key - move to end
-                moveToEnd();
-            } else if (data === '\\x1b[3~') {
-                // Delete key - delete character forward
-                deleteForward();
-            } else if (data === '\\r') {
-                // Enter key - send command
-                terminal.write('\\r\\n');
-                
-                if (inputBuffer.trim()) {
-                    // Add to history
-                    commandHistory.push(inputBuffer.trim());
-                    historyIndex = -1;
-                    
-                    // Send command
-                    ws.send(JSON.stringify({
-                        type: 'command',
-                        content: inputBuffer.trim(),
-                        session: currentSessionId
-                    }));
-                    
-                    // Show processing indicator
-                    terminal.write('⏳ Processing...\\r\\n');
-                } else {
-                    // Empty command, just show new prompt immediately
-                    terminal.write('$ ');
+            try {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    terminal.write('\r\n❌ Not connected to session\r\n$ ');
+                    return;
                 }
                 
-                // Always reset input buffer and cursor position after Enter
-                inputBuffer = '';
-                cursorPosition = 0;
-            } else if (data === '\\u007f') {
-                // Backspace
-                deleteChar();
-            } else if (data === '\\u0001') {
-                // Ctrl+A - beginning of line
-                moveToBeginning();
-            } else if (data === '\\u0002') {
-                // Ctrl+B - backward one character
-                moveCursorLeft();
-            } else if (data === '\\u0003') {
-                // Ctrl+C - interrupt
-                ws.send(JSON.stringify({
-                    type: 'interrupt',
-                    session: currentSessionId
-                }));
-                terminal.write('^C\\r\\n$ ');
-                inputBuffer = '';
-                cursorPosition = 0;
-            } else if (data === '\\u0004') {
-                // Ctrl+D - EOF
-                if (inputBuffer === '') {
-                    ws.send(JSON.stringify({
-                        type: 'eof',
-                        session: currentSessionId
-                    }));
-                } else {
+                const code = data.charCodeAt(0);
+                
+                // Handle special key sequences with validation
+                if (data === '\x1b[A') {
+                    // Up arrow - previous command in history
+                    previousHistory();
+                } else if (data === '\x1b[B') {
+                    // Down arrow - next command in history
+                    nextHistory();
+                } else if (data === '\x1b[C') {
+                    // Right arrow - move cursor right
+                    moveCursorRight();
+                } else if (data === '\x1b[D') {
+                    // Left arrow - move cursor left
+                    moveCursorLeft();
+                } else if (data === '\x1b[H' || data === '\x1b[1~') {
+                    // Home key - move to beginning
+                    moveToBeginning();
+                } else if (data === '\x1b[F' || data === '\x1b[4~') {
+                    // End key - move to end
+                    moveToEnd();
+                } else if (data === '\x1b[3~') {
+                    // Delete key - delete character forward
                     deleteForward();
-                }
-            } else if (data === '\\u0005') {
-                // Ctrl+E - end of line
-                moveToEnd();
-            } else if (data === '\\u0006') {
-                // Ctrl+F - forward one character
-                moveCursorRight();
-            } else if (data === '\\u000b') {
-                // Ctrl+K - kill to end of line
-                killToEnd();
-            } else if (data === '\\u000c') {
-                // Ctrl+L - clear screen
-                terminal.clear();
-                terminal.write('$ ' + inputBuffer);
-                // Reposition cursor
-                if (cursorPosition < inputBuffer.length) {
-                    const moveBack = inputBuffer.length - cursorPosition;
-                    for (let i = 0; i < moveBack; i++) {
-                        terminal.write('\\x1b[D');
+                } else if (data === '\r') {
+                    // Enter key - send command
+                    terminal.write('\r\n');
+                    
+                    if (inputBuffer.trim()) {
+                        // Add to history
+                        commandHistory.push(inputBuffer.trim());
+                        historyIndex = -1;
+                        
+                        // Send command with error handling
+                        try {
+                            ws.send(JSON.stringify({
+                                type: 'command',
+                                content: inputBuffer.trim(),
+                                session: currentSessionId
+                            }));
+                            
+                            // Show processing indicator
+                            terminal.write('⏳ Processing...\r\n');
+                        } catch (error) {
+                            console.error('Error sending WebSocket message:', error);
+                            terminal.write('❌ Error sending command\r\n$ ');
+                        }
+                    } else {
+                        // Empty command, just show new prompt immediately
+                        terminal.write('$ ');
+                    }
+                    
+                    // Always reset input buffer and cursor position after Enter
+                    inputBuffer = '';
+                    cursorPosition = 0;
+                } else if (data === '\u007f') {
+                    // Backspace
+                    deleteChar();
+                } else if (data === '\u0001') {
+                    // Ctrl+A - beginning of line
+                    moveToBeginning();
+                } else if (data === '\u0002') {
+                    // Ctrl+B - backward one character
+                    moveCursorLeft();
+                } else if (data === '\u0003') {
+                    // Ctrl+C - interrupt
+                    try {
+                        ws.send(JSON.stringify({
+                            type: 'interrupt',
+                            session: currentSessionId
+                        }));
+                    } catch (error) {
+                        console.error('Error sending interrupt:', error);
+                    }
+                    terminal.write('^C\r\n$ ');
+                    inputBuffer = '';
+                    cursorPosition = 0;
+                } else if (data === '\u0004') {
+                    // Ctrl+D - EOF
+                    if (inputBuffer === '') {
+                        try {
+                            ws.send(JSON.stringify({
+                                type: 'eof',
+                                session: currentSessionId
+                            }));
+                        } catch (error) {
+                            console.error('Error sending EOF:', error);
+                        }
+                    } else {
+                        deleteForward();
+                    }
+                } else if (data === '\u0005') {
+                    // Ctrl+E - end of line
+                    moveToEnd();
+                } else if (data === '\u0006') {
+                    // Ctrl+F - forward one character
+                    moveCursorRight();
+                } else if (data === '\u000b') {
+                    // Ctrl+K - kill to end of line
+                    killToEnd();
+                } else if (data === '\u000c') {
+                    // Ctrl+L - clear screen
+                    terminal.clear();
+                    terminal.write('$ ' + inputBuffer);
+                    // Reposition cursor
+                    if (cursorPosition < inputBuffer.length) {
+                        const moveBack = inputBuffer.length - cursorPosition;
+                        terminal.write('\x1b[' + moveBack + 'D');
+                    }
+                } else if (data === '\u0015') {
+                    // Ctrl+U - kill entire line
+                    killLine();
+                } else if (data === '\u0017') {
+                    // Ctrl+W - kill word backward
+                    let pos = cursorPosition;
+                    while (pos > 0 && inputBuffer[pos - 1] === ' ') pos--;
+                    while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
+                    inputBuffer = inputBuffer.slice(0, pos) + inputBuffer.slice(cursorPosition);
+                    cursorPosition = pos;
+                    updateDisplay();
+                } else if (code >= 32 && code < 127) {
+                    // Regular printable character - validate before inserting
+                    if (typeof data === 'string' && data.length === 1) {
+                        insertChar(data);
                     }
                 }
-            } else if (data === '\\u0015') {
-                // Ctrl+U - kill entire line
-                killLine();
-            } else if (data === '\\u0017') {
-                // Ctrl+W - kill word backward
-                let pos = cursorPosition;
-                while (pos > 0 && inputBuffer[pos - 1] === ' ') pos--;
-                while (pos > 0 && inputBuffer[pos - 1] !== ' ') pos--;
-                inputBuffer = inputBuffer.slice(0, pos) + inputBuffer.slice(cursorPosition);
-                cursorPosition = pos;
-                updateDisplay();
-            } else if (code >= 32 && code < 127) {
-                // Regular printable character
-                insertChar(data);
+                // Ignore other control characters to prevent parsing errors
+            } catch (error) {
+                console.error('Error in terminal onData handler:', error, 'Data:', JSON.stringify(data));
+                // Don't let errors break the terminal
             }
-            // Ignore other control characters
         });
 
         // Handle window resize
