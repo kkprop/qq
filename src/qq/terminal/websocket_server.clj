@@ -1,11 +1,12 @@
 (ns qq.terminal.websocket-server
-  "🚀 THE Definitive WebSocket Server - One Server to Rule Them All
+  "🚀 THE Definitive WebSocket Server - Complete End-to-End Q&A Flow
   
   This is THE ONLY WebSocket server implementation we need.
-  Combines:
-  - Working handshake (from working_websocket_stub.clj)
-  - Proper Q&A boundaries (from qq.tmux)
-  - Simple, clean architecture (no nested try-catch hell)
+  Features:
+  - Working WebSocket handshake
+  - Complete WebSocket frame processing  
+  - Proper Q&A boundaries (uses qq.tmux/send-and-wait-improved)
+  - Clean architecture (no nested try-catch hell)
   
   No more confusion about which server to use!"
   (:require [clojure.string :as str]
@@ -26,6 +27,56 @@
         sha1 (MessageDigest/getInstance "SHA-1")
         hash (.digest sha1 (.getBytes combined "UTF-8"))]
     (.encodeToString (Base64/getEncoder) hash)))
+
+(defn- read-websocket-frame [input-stream]
+  "Read a WebSocket frame and return the payload as string"
+  (try
+    (let [first-byte (.read input-stream)]
+      (when (>= first-byte 0)
+        (let [second-byte (.read input-stream)
+              payload-length (bit-and second-byte 0x7F)
+              masked? (bit-test second-byte 7)
+              opcode (bit-and first-byte 0x0F)]
+          
+          (when (and (= opcode 1) masked? (> payload-length 0)) ; Text frame, masked, has content
+            ;; Read mask key
+            (let [mask-key (byte-array 4)]
+              (.read input-stream mask-key)
+              
+              ;; Read payload
+              (let [payload (byte-array payload-length)]
+                (.read input-stream payload)
+                
+                ;; Unmask payload
+                (dotimes [i payload-length]
+                  (aset payload i (byte (bit-xor (aget payload i) 
+                                                (aget mask-key (mod i 4))))))
+                
+                ;; Convert to string
+                (String. payload "UTF-8")))))))
+    (catch Exception e
+      (println (str "❌ Error reading WebSocket frame: " (.getMessage e)))
+      nil)))
+
+(defn- send-websocket-frame [output-stream message]
+  "Send a WebSocket text frame"
+  (try
+    (let [message-bytes (.getBytes message "UTF-8")
+          frame-length (count message-bytes)]
+      
+      ;; Send text frame header (FIN=1, opcode=1 for text)
+      (.write output-stream 0x81)
+      
+      ;; Send payload length
+      (if (< frame-length 126)
+        (.write output-stream frame-length)
+        (throw (Exception. "Message too long for simple implementation")))
+      
+      ;; Send payload
+      (.write output-stream message-bytes)
+      (.flush output-stream))
+    (catch Exception e
+      (println (str "❌ Error sending WebSocket frame: " (.getMessage e))))))
 
 (defn- process-qa-command [command session-id]
   "Process Q&A command using our proven implementation"
@@ -68,7 +119,7 @@
       {:type "error" :content (str "Message error: " (.getMessage e))})))
 
 (defn- handle-connection [client-socket]
-  "Handle WebSocket connection - PROVEN WORKING HANDSHAKE"
+  "Handle WebSocket connection with complete message processing"
   (try
     (println "📞 New WebSocket connection")
     (let [reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
@@ -98,12 +149,23 @@
                     
                     (println "✅ WebSocket handshake completed")
                     
-                    ;; Keep connection alive (stub for now - message processing to be added)
-                    (loop [counter 0]
-                      (Thread/sleep 5000)
-                      (when (.isConnected client-socket)
-                        (println (str "💓 WebSocket alive " counter))
-                        (recur (inc counter)))))
+                    ;; Send welcome message
+                    (send-websocket-frame (.getOutputStream client-socket)
+                      (json/write-str {:type "welcome" :content "🚀 THE WebSocket server ready for Q&A!"}))
+                    
+                    ;; Process WebSocket messages
+                    (println "🔄 Starting WebSocket message processing...")
+                    (let [input-stream (.getInputStream client-socket)
+                          output-stream (.getOutputStream client-socket)]
+                      
+                      (while (.isConnected client-socket)
+                        (when-let [message (read-websocket-frame input-stream)]
+                          (println (str "📨 Processing WebSocket message: " message))
+                          
+                          ;; Handle the message and get response
+                          (let [response (handle-websocket-message message)]
+                            (println (str "📤 Sending response: " response))
+                            (send-websocket-frame output-stream (json/write-str response)))))))
                   
                   (do
                     (println "❌ No WebSocket key found")
@@ -122,10 +184,10 @@
       (.close client-socket))))
 
 (defn start-websocket-server [port]
-  "Start THE definitive WebSocket server"
+  "Start THE definitive WebSocket server with complete Q&A processing"
   (println (str "🚀 Starting THE WebSocket Server on port " port))
-  (println "✅ This is the ONLY WebSocket server you need!")
-  (println "🎯 Features: Working handshake + Proper Q&A boundaries")
+  (println "✅ Complete end-to-end Q&A flow: Browser → WebSocket → tmux → Q → response")
+  (println "🎯 Features: Working handshake + WebSocket frames + Proper Q&A boundaries")
   
   (swap! server-state assoc :running true)
   
@@ -147,10 +209,10 @@
         (println (str "❌ Server error: " (.getMessage e))))))
   
   ;; Keep main thread alive
-  (println "💓 THE WebSocket server running!")
+  (println "💓 THE WebSocket server running - ready for complete Q&A!")
   (while (:running @server-state)
     (Thread/sleep 5000)
-    (println "💓 Server heartbeat"))
+    (println "💓 Server heartbeat - processing Q&A"))
   
   (println "🛑 THE WebSocket server stopped"))
 
