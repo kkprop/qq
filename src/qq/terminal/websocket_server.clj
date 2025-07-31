@@ -28,34 +28,68 @@
         hash (.digest sha1 (.getBytes combined "UTF-8"))]
     (.encodeToString (Base64/getEncoder) hash)))
 
-(defn- read-websocket-frame [input-stream]
+(defn- read-websocket-frame [input-stream connection-id]
   "Read a WebSocket frame and return the payload as string"
   (try
-    (let [first-byte (.read input-stream)]
-      (when (>= first-byte 0)
-        (let [second-byte (.read input-stream)
-              payload-length (bit-and second-byte 0x7F)
-              masked? (bit-test second-byte 7)
-              opcode (bit-and first-byte 0x0F)]
-          
-          (when (and (= opcode 1) masked? (> payload-length 0)) ; Text frame, masked, has content
-            ;; Read mask key
-            (let [mask-key (byte-array 4)]
-              (.read input-stream mask-key)
+    ;; Check if data is available before attempting to read
+    (when (> (.available input-stream) 0)
+      (println (str "🔍 Data available [" connection-id "], attempting to read WebSocket frame..."))
+      (let [first-byte (.read input-stream)]
+        (println (str "🔍 First byte [" connection-id "]: " first-byte))
+        (when (>= first-byte 0)
+          (let [second-byte (.read input-stream)
+                payload-length (bit-and second-byte 0x7F)
+                masked? (bit-test second-byte 7)
+                opcode (bit-and first-byte 0x0F)]
+            
+            (println (str "🔍 Frame details [" connection-id "]: opcode=" opcode " masked=" masked? " length=" payload-length))
+            
+            ;; Handle different frame types
+            (cond
+              (= opcode 1) ; Text frame
+              (when (and masked? (> payload-length 0))
+                (println (str "🔍 Reading TEXT frame [" connection-id "] with mask..."))
+                ;; Read mask key
+                (let [mask-key (byte-array 4)]
+                  (.read input-stream mask-key)
+                  (println (str "🔍 Mask key [" connection-id "] read: " (vec mask-key)))
+                  
+                  ;; Read payload
+                  (let [payload (byte-array payload-length)]
+                    (.read input-stream payload)
+                    (println (str "🔍 Raw payload [" connection-id "] read: " (vec payload)))
+                    
+                    ;; Unmask payload
+                    (dotimes [i payload-length]
+                      (aset payload i (byte (bit-xor (aget payload i) 
+                                                    (aget mask-key (mod i 4))))))
+                    
+                    ;; Convert to string
+                    (let [message (String. payload "UTF-8")]
+                      (println (str "🎉 DECODED TEXT MESSAGE [" connection-id "]: " message))
+                      message))))
               
-              ;; Read payload
-              (let [payload (byte-array payload-length)]
-                (.read input-stream payload)
-                
-                ;; Unmask payload
-                (dotimes [i payload-length]
-                  (aset payload i (byte (bit-xor (aget payload i) 
-                                                (aget mask-key (mod i 4))))))
-                
-                ;; Convert to string
-                (String. payload "UTF-8")))))))
+              (= opcode 8) ; Close frame
+              (do
+                (println (str "🔍 Received CLOSE frame [" connection-id "] - connection closing"))
+                nil)
+              
+              (= opcode 9) ; Ping frame
+              (do
+                (println (str "🔍 Received PING frame [" connection-id "] - should send PONG"))
+                nil)
+              
+              (= opcode 10) ; Pong frame
+              (do
+                (println (str "🔍 Received PONG frame [" connection-id "] - keepalive"))
+                nil)
+              
+              :else
+              (do
+                (println (str "🔍 Received unknown frame type [" connection-id "]: opcode=" opcode))
+                nil))))))
     (catch Exception e
-      (println (str "❌ Error reading WebSocket frame: " (.getMessage e)))
+      (println (str "❌ Error reading WebSocket frame [" connection-id "]: " (.getMessage e)))
       nil)))
 
 (defn- send-websocket-frame [output-stream message]
@@ -120,68 +154,74 @@
 
 (defn- handle-connection [client-socket]
   "Handle WebSocket connection with complete message processing"
-  (try
-    (println "📞 New WebSocket connection")
-    (let [reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
-          writer (PrintWriter. (.getOutputStream client-socket) true)]
-      
-      ;; Read request line
-      (let [request-line (.readLine reader)]
-        (println (str "📥 Request: " request-line))
+  (let [connection-id (str "conn-" (System/currentTimeMillis))]
+    (try
+      (println (str "📞 New WebSocket connection: " connection-id))
+      (let [reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
+            writer (PrintWriter. (.getOutputStream client-socket) true)]
         
-        ;; Read headers
-        (loop [headers {}]
-          (let [line (.readLine reader)]
-            (if (or (nil? line) (empty? line))
-              ;; Headers done, process handshake
-              (let [websocket-key (get headers "sec-websocket-key")]
-                (if websocket-key
-                  (do
-                    (println (str "🔑 WebSocket key: " websocket-key))
-                    
-                    ;; Send WebSocket handshake response
-                    (.println writer "HTTP/1.1 101 Switching Protocols")
-                    (.println writer "Upgrade: websocket")
-                    (.println writer "Connection: Upgrade")
-                    (.println writer (str "Sec-WebSocket-Accept: " (websocket-accept-key websocket-key)))
-                    (.println writer "")
-                    (.flush writer)
-                    
-                    (println "✅ WebSocket handshake completed")
-                    
-                    ;; Send welcome message
-                    (send-websocket-frame (.getOutputStream client-socket)
-                      (json/write-str {:type "welcome" :content "🚀 THE WebSocket server ready for Q&A!"}))
-                    
-                    ;; Process WebSocket messages
-                    (println "🔄 Starting WebSocket message processing...")
-                    (let [input-stream (.getInputStream client-socket)
-                          output-stream (.getOutputStream client-socket)]
+        ;; Read request line
+        (let [request-line (.readLine reader)]
+          (println (str "📥 Request [" connection-id "]: " request-line))
+          
+          ;; Read headers
+          (loop [headers {}]
+            (let [line (.readLine reader)]
+              (if (or (nil? line) (empty? line))
+                ;; Headers done, process handshake
+                (let [websocket-key (get headers "sec-websocket-key")]
+                  (if websocket-key
+                    (do
+                      (println (str "🔑 WebSocket key [" connection-id "]: " websocket-key))
                       
-                      (while (.isConnected client-socket)
-                        (when-let [message (read-websocket-frame input-stream)]
-                          (println (str "📨 Processing WebSocket message: " message))
+                      ;; Send WebSocket handshake response
+                      (.println writer "HTTP/1.1 101 Switching Protocols")
+                      (.println writer "Upgrade: websocket")
+                      (.println writer "Connection: Upgrade")
+                      (.println writer (str "Sec-WebSocket-Accept: " (websocket-accept-key websocket-key)))
+                      (.println writer "")
+                      (.flush writer)
+                      
+                      (println (str "✅ WebSocket handshake completed [" connection-id "]"))
+                      
+                      ;; Don't send welcome message immediately - let connection stabilize
+                      ;; (send-websocket-frame (.getOutputStream client-socket)
+                      ;;   (json/write-str {:type "welcome" :content "🚀 THE WebSocket server ready for Q&A!"}))
+                      
+                      ;; Process WebSocket messages
+                      (println (str "🔄 Starting WebSocket message processing [" connection-id "]..."))
+                      (let [input-stream (.getInputStream client-socket)
+                            output-stream (.getOutputStream client-socket)]
+                        
+                        (println (str "🔄 Entering message processing loop [" connection-id "]..."))
+                        (while (.isConnected client-socket)
+                          (when-let [message (read-websocket-frame input-stream connection-id)]
+                            (println (str "📨 Processing WebSocket message [" connection-id "]: " message))
+                            
+                            ;; Handle the message and get response
+                            (let [response (handle-websocket-message message)]
+                              (println (str "📤 Sending response [" connection-id "]: " response))
+                              (send-websocket-frame output-stream (json/write-str response))))
                           
-                          ;; Handle the message and get response
-                          (let [response (handle-websocket-message message)]
-                            (println (str "📤 Sending response: " response))
-                            (send-websocket-frame output-stream (json/write-str response)))))))
-                  
-                  (do
-                    (println "❌ No WebSocket key found")
-                    (.println writer "HTTP/1.1 400 Bad Request")
-                    (.println writer "")
-                    (.flush writer))))
-              
-              ;; Parse header
-              (if-let [[_ key value] (re-matches #"([^:]+):\s*(.+)" line)]
-                (recur (assoc headers (str/lower-case key) value))
-                (recur headers)))))))
-    
-    (catch Exception e
-      (println (str "❌ Connection error: " (.getMessage e))))
-    (finally
-      (.close client-socket))))
+                          ;; Small delay to prevent busy waiting
+                          (Thread/sleep 100))))
+                    
+                    (do
+                      (println (str "❌ No WebSocket key found [" connection-id "]"))
+                      (.println writer "HTTP/1.1 400 Bad Request")
+                      (.println writer "")
+                      (.flush writer))))
+                
+                ;; Parse header
+                (if-let [[_ key value] (re-matches #"([^:]+):\s*(.+)" line)]
+                  (recur (assoc headers (str/lower-case key) value))
+                  (recur headers)))))))
+      
+      (catch Exception e
+        (println (str "❌ Connection error [" connection-id "]: " (.getMessage e))))
+      (finally
+        (println (str "🔌 Closing connection [" connection-id "]"))
+        (.close client-socket)))))
 
 (defn start-websocket-server [port]
   "Start THE definitive WebSocket server with complete Q&A processing"
