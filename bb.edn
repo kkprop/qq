@@ -16,9 +16,12 @@
              [qq.browser.testing :as browser-testing]
              [qq.terminal.server :as terminal-server]
              [qq.terminal.bridge :as terminal-bridge]
-             [qq.terminal.working-websocket-stub :as working-ws]
+             [qq.terminal.websocket-server :as ws-server]  ; THE definitive WebSocket server
+             [qq.terminal.command-test :as cmd-test]
              [qq.terminal.qa-flow-test :as qa-test]
-             [qq.browser.input-test :as input-test])  ; Browser input testing
+             [qq.browser.input-test :as input-test]
+             [qq.browser.qa-flow-test :as browser-qa-test]
+             [qq.browser.direct-websocket-test :as direct-ws-test])  ; Direct WebSocket testing
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -215,15 +218,27 @@
   list-terminal-sessions {:doc "📋 List all terminal Q sessions"
                           :task (terminal-bridge/list-all-sessions)}
   
-  ;; 🔧 QA-Tested WebSocket Server (Proven Working Implementation)
-  start-working-server {:doc "🚀 Start QA-tested WebSocket server with Q&A flow"
-                        :task (working-ws/start-working-server 9091)}
+  ;; 🚀 THE WebSocket Server (The Only One You Need)
+  start-websocket-server {:doc "🚀 Start THE definitive WebSocket server"
+                          :task (ws-server/start-websocket-server 9091)}
   
-  start-persistent-server {:doc "🔄 Start persistent QA-tested WebSocket server"
-                           :task (working-ws/start-working-server-persistent 9091)}
+  stop-websocket-server {:doc "🛑 Stop THE WebSocket server"
+                         :task (ws-server/stop-websocket-server)}
   
-  stop-working-server {:doc "🛑 Stop QA-tested WebSocket server"
-                       :task (working-ws/stop-working-server)}
+  websocket-server-status {:doc "📊 Get THE WebSocket server status"
+                           :task (ws-server/server-status)}
+  
+  ;; 🧪 Testing
+  test-direct-websocket {:doc "🧪 Test direct WebSocket communication"
+                         :task (direct-ws-test/test-direct-websocket)}
+  
+  ;; 🧪 Complete Q&A Flow Testing
+  test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"
+                       :task (browser-qa-test/test-qa-interaction)}
+  
+  ;; 🧪 Command Forwarding Testing
+  test-command-forwarding {:doc "🧪 Test command forwarding to tmux"
+                           :task (cmd-test/test-command-forwarding)}
   
   ;; 🧪 Browser Input Testing
   test-browser-input {:doc "🧪 Test typing in browser terminal interface"
