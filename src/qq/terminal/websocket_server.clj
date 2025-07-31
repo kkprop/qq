@@ -134,10 +134,27 @@
       ;; Send text frame header (FIN=1, opcode=1 for text)
       (.write output-stream 0x81)
       
-      ;; Send payload length
-      (if (< frame-length 126)
+      ;; Send payload length with proper WebSocket framing
+      (cond
+        (< frame-length 126)
         (.write output-stream frame-length)
-        (throw (Exception. "Message too long for simple implementation")))
+        
+        (< frame-length 65536)
+        (do
+          (.write output-stream 126)
+          ;; Send 16-bit length in network byte order
+          (.write output-stream (bit-shift-right frame-length 8))
+          (.write output-stream (bit-and frame-length 0xFF)))
+        
+        :else
+        (do
+          (.write output-stream 127)
+          ;; Send 64-bit length in network byte order (simplified for our use case)
+          (.write output-stream 0) (.write output-stream 0) (.write output-stream 0) (.write output-stream 0)
+          (.write output-stream (bit-shift-right frame-length 24))
+          (.write output-stream (bit-and (bit-shift-right frame-length 16) 0xFF))
+          (.write output-stream (bit-and (bit-shift-right frame-length 8) 0xFF))
+          (.write output-stream (bit-and frame-length 0xFF))))
       
       ;; Send payload
       (.write output-stream message-bytes)
