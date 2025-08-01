@@ -315,7 +315,16 @@
                   (println (str "Server error: " (.getMessage e))))))))
         
         (println (str "✅ Terminal WebSocket server started on ws://localhost:" port "/terminal/{session-id}"))
-        (println "🎯 Ready for browser terminal connections!")))))
+        (println "🎯 Ready for browser terminal connections!")
+        
+        ;; Keep the main thread alive by blocking on server socket
+        ;; This prevents the bb task from exiting immediately
+        (try
+          (while (not (.isClosed server-socket))
+            (Thread/sleep 1000)) ; Check every second
+        (catch InterruptedException e
+          (println "🛑 Server interrupted, shutting down...")
+          (.close server-socket)))))))
 
 (defn stop-terminal-server
   "Stop WebSocket server"
