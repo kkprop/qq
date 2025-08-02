@@ -30,7 +30,8 @@
              [qq.browser.improved-sendkeys-test :as improved-sendkeys-test]
              [qq.browser.etaoin-direct-test :as etaoin-direct-test]
              [qq.browser.etaoin-websocket-test :as etaoin-ws-test]
-             [qq.browser.manual-typing-debug :as manual-debug])  ; Manual typing debug test
+             [qq.browser.manual-typing-debug :as manual-debug]
+             [qq.browser.simple-websocket-test :as simple-ws-test])  ; Simple WebSocket test
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -216,13 +217,13 @@
   
   ;; 🖥️ Terminal Server Tasks
   start-terminal-server {:doc "🚀 Start WebSocket terminal server"
-                         :task (terminal-server/start-terminal-server {:port 9091})}
+                         :task (ws-server/start-websocket-server 9091)}
   
   stop-terminal-server {:doc "🛑 Stop WebSocket terminal server"
-                        :task (terminal-server/stop-terminal-server)}
+                        :task (ws-server/stop-websocket-server)}
   
   terminal-status {:doc "📊 Get terminal server status"
-                   :task (terminal-server/get-server-status)}
+                   :task (ws-server/server-status)}
   
   list-terminal-sessions {:doc "📋 List all terminal Q sessions"
                           :task (terminal-bridge/list-all-sessions)}
@@ -267,6 +268,9 @@
   
   debug-manual-typing {:doc "🔍 Debug manual typing Enter key issue with logging"
                        :task (manual-debug/test-manual-typing-debug)}
+  
+  test-simple-websocket {:doc "🧪 Simple WebSocket test (no web server dependency)"
+                         :task (simple-ws-test/test-websocket-directly)}
   
   ;; 🧪 Complete Q&A Flow Testing
   test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"

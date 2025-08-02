@@ -234,6 +234,7 @@
           reader (BufferedReader. (InputStreamReader. input-stream))
           writer (PrintWriter. output-stream true)]
       
+      (println "📋 Reading HTTP request...")
       ;; Read HTTP request
       (let [request-lines (loop [lines []]
                             (let [line (.readLine reader)]
@@ -242,10 +243,15 @@
                                 (recur (conj lines line)))))
             request (parse-websocket-request request-lines)]
         
+        (println (str "📋 Parsed request - Path: " (:path request) ", WebSocket Key: " (:websocket-key request)))
+        
         ;; Send WebSocket handshake
+        (println "🤝 Sending WebSocket handshake...")
         (send-websocket-handshake writer (:websocket-key request))
+        (println "✅ WebSocket handshake sent")
         
         ;; Send initial session info
+        (println "📤 Sending initial session info...")
         (let [session-info (get-session-info session-id)]
           (send-websocket-message output-stream
             {:type "session_info"
@@ -260,7 +266,10 @@
             (recur)))))
     
     (catch Exception e
-      (println (str "WebSocket connection error: " (.getMessage e))))
+      (println (str "❌ WebSocket connection error for session " session-id ": " (.getMessage e)))
+      (println (str "❌ Error type: " (type e)))
+      (when (.getCause e)
+        (println (str "❌ Caused by: " (.getMessage (.getCause e))))))
     
     (finally
       (.close socket)

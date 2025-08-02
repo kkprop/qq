@@ -204,9 +204,11 @@
             document.getElementById('sessionName').textContent = `Q Session: ${currentSessionId}`;
             
             try {
+                console.log(`🔌 Attempting WebSocket connection to: ws://localhost:9091/terminal/${currentSessionId}`);
                 ws = new WebSocket(`ws://localhost:9091/terminal/${currentSessionId}`);
                 
                 ws.onopen = function() {
+                    console.log('✅ WebSocket connection opened successfully');
                     updateConnectionStatus('connected', 'Connected');
                     document.getElementById('sessionDetails').textContent = `Connected to ${currentSessionId}`;
                     
@@ -282,13 +284,18 @@
                 };
                 
                 ws.onerror = function(error) {
+                    console.error('❌ WebSocket error occurred:', error);
                     updateConnectionStatus('disconnected', 'Connection error');
-                    console.error('WebSocket error:', error);
+                };
+                
+                ws.onclose = function(event) {
+                    console.log(`🔌 WebSocket connection closed - Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
+                    updateConnectionStatus('disconnected', 'Disconnected');
                 };
                 
             } catch (error) {
+                console.error('❌ Failed to create WebSocket:', error);
                 updateConnectionStatus('disconnected', 'Failed to connect');
-                console.error('Failed to create WebSocket:', error);
             }
         }
 
@@ -552,7 +559,7 @@
 
         // Welcome message
         console.log('🤖 QQ Terminal initialized');
-        console.log('📡 WebSocket will connect to ws://localhost:9091/terminal/');
+        console.log(`📡 WebSocket will connect to ws://localhost:9091/terminal/${currentSessionId}`);
         console.log('🎯 Ready for interactive Q sessions!');
     </script>
 </body>
