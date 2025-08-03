@@ -298,10 +298,19 @@
                                 break;
                                 
                             case 'tmux-realtime':
-                                // Handle real-time tmux updates
+                                // Handle real-time tmux updates with smart spinner handling
                                 if (data.content && tmuxHistoryLoaded) {
-                                    // Append new content in real-time
-                                    terminal.write(data.content + '\r\n');
+                                    // Check for spinner patterns that should overwrite
+                                    if (data.content.includes('Thinking...') && data.content.includes('\r')) {
+                                        // Handle spinner - move cursor to beginning of line and overwrite
+                                        terminal.write('\r' + data.content.replace(/\r/g, ''));
+                                    } else if (data.content.includes('\r')) {
+                                        // Other carriage return content - handle as overwrite
+                                        terminal.write(data.content);
+                                    } else {
+                                        // Regular content - add newline
+                                        terminal.write(data.content + '\r\n');
+                                    }
                                 }
                                 break;
                                 

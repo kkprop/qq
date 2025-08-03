@@ -31,20 +31,20 @@
 (declare send-websocket-frame)
 
 (defn clean-streaming-content
-  "Clean streaming content by removing ANSI escape sequences and spinner chars"
+  "Clean streaming content while preserving in-place updates for spinners"
   [content]
   (-> content
-      ;; Remove ANSI escape sequences
+      ;; Remove ANSI escape sequences but preserve cursor movements
       (str/replace #"\u001B\[[0-9;]*[mK]" "")
-      ;; Remove spinner characters (Braille patterns)
+      ;; Remove spinner characters but keep the structure
       (str/replace #"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]" "")
-      ;; Remove carriage returns that cause overwriting
-      (str/replace #"\r" "")
+      ;; DON'T remove carriage returns - they're needed for in-place updates
+      ;; (str/replace #"\r" "") <- REMOVED THIS LINE
       ;; Remove excessive dots and spaces
       (str/replace #"\.{3,}" "...")
       ;; Clean up multiple spaces
       (str/replace #" {2,}" " ")
-      ;; Remove empty lines
+      ;; Remove empty lines but preserve structure
       (str/replace #"\n\s*\n" "\n")))
 
 ;; 🚀 AGGRESSIVE TMUX MIRRORING FUNCTIONS
@@ -124,11 +124,13 @@
         (with-open [reader (io/reader (:out tail-process))]
           (loop []
             (when-let [line (.readLine reader)]
-              ;; For aggressive mirroring, send ALL content (minimal filtering)
+              ;; For aggressive mirroring, preserve in-place updates
               (let [cleaned-content (-> line
                                         ;; Only remove the most problematic chars
                                         (str/replace #"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]" "")
-                                        (str/replace #"\r" ""))]
+                                        ;; Keep carriage returns for in-place updates
+                                        ;; (str/replace #"\r" "") <- REMOVED
+                                        )]
                 (when (not (str/blank? cleaned-content))
                   (let [message {:type "tmux-realtime"
                                  :content cleaned-content
