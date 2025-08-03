@@ -93,6 +93,22 @@
       (println (str "❌ Error capturing tmux history: " (.getMessage e)))
       "")))
 
+(defn sync-full-tmux-content-simple
+  "Send a simple test message instead of full content to test WebSocket stability"
+  [client-socket session-name]
+  (println (str "🔄 Sending simple test message to client"))
+  (try
+    (let [message {:type "tmux-full-sync"
+                   :content "🧪 Simple test message - WebSocket connection working!"
+                   :session session-name
+                   :timestamp (System/currentTimeMillis)}
+          output-stream (.getOutputStream client-socket)
+          json-message (json/write-str message)]
+      (println (str "📡 Sending simple test message"))
+      (send-websocket-frame output-stream json-message))
+    (catch Exception e
+      (println (str "❌ Error sending simple message: " (.getMessage e))))))
+
 (defn sync-full-tmux-content
   "Send the entire tmux content to a WebSocket client in chunks to avoid broken pipe"
   [client-socket session-name]
@@ -109,25 +125,30 @@
           
           ;; Send initial sync message
           (let [initial-message {:type "tmux-full-sync-start"
-                                :total-lines (count lines)
+                                :totalLines (count lines)  ; Changed from :total-lines to :totalLines
                                 :session session-name
                                 :timestamp (System/currentTimeMillis)}
                 output-stream (.getOutputStream client-socket)
                 json-message (json/write-str initial-message)]
             (send-websocket-frame output-stream json-message))
           
-          ;; Send content in chunks
+          ;; Send content in chunks with error handling
           (doseq [chunk-lines (partition-all chunk-size lines)]
-            (let [chunk-content (str/join "\n" chunk-lines)
-                  message {:type "tmux-full-sync-chunk"
-                           :content chunk-content
-                           :session session-name
-                           :timestamp (System/currentTimeMillis)}
-                  output-stream (.getOutputStream client-socket)
-                  json-message (json/write-str message)]
-              (send-websocket-frame output-stream json-message)
-              ;; Small delay between chunks to prevent overwhelming
-              (Thread/sleep 50)))
+            (try
+              (let [chunk-content (str/join "\n" chunk-lines)
+                    message {:type "tmux-full-sync-chunk"
+                             :content chunk-content
+                             :session session-name
+                             :timestamp (System/currentTimeMillis)}
+                    output-stream (.getOutputStream client-socket)
+                    json-message (json/write-str message)]
+                (send-websocket-frame output-stream json-message)
+                ;; Small delay between chunks to prevent overwhelming
+                (Thread/sleep 50))
+              (catch Exception e
+                (println (str "❌ Error sending chunk: " (.getMessage e)))
+                ;; Don't continue if chunk sending fails
+                (throw e))))
           
           ;; Send completion message
           (let [complete-message {:type "tmux-full-sync-complete"
@@ -211,8 +232,8 @@
   [session-name client-socket]
   (println (str "🚀 Starting AGGRESSIVE tmux mirroring for: " session-name))
   
-  ;; Step 1: Sync existing content immediately
-  (sync-full-tmux-content client-socket session-name)
+  ;; Step 1: Send simple test message first
+  (sync-full-tmux-content-simple client-socket session-name)
   
   ;; Step 2: Start real-time streaming
   (add-streaming-client client-socket)
