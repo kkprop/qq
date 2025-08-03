@@ -69,6 +69,15 @@
             background: #505050;
         }
         
+        .streaming-status {
+            color: #00ff00;
+            font-size: 12px;
+            margin-left: 10px;
+            padding: 4px 8px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 3px;
+        }
+        
         .terminal-wrapper {
             position: absolute;
             top: 40px;
@@ -112,6 +121,7 @@
                 <button class="control-btn" onclick="terminal.clear()">Clear</button>
                 <button class="control-btn" onclick="reconnectWebSocket()">Reconnect</button>
                 <button class="control-btn" onclick="window.open('/web/dashboard.html', '_blank')">Dashboard</button>
+                <span class="streaming-status" id="streamingStatus">🚀 Aggressive tmux mirroring</span>
             </div>
         </div>
         
@@ -178,6 +188,10 @@
         let ws = null;
         let currentSessionId = null;
         let inputBuffer = '';
+        
+        // 🚀 Aggressive tmux mirroring state
+        let aggressiveMirroringActive = true;
+        let tmuxHistoryLoaded = false;
         let cursorPosition = 0;
         let commandHistory = [];
         let historyIndex = -1;
@@ -264,6 +278,49 @@
                             case 'pong':
                                 // Handle pong silently
                                 break;
+                            
+                            // 🚀 AGGRESSIVE TMUX MIRRORING message types
+                            case 'tmux-full-sync':
+                                // Handle full tmux history sync
+                                console.log('🚀 Full tmux sync received:', data.content.length, 'characters');
+                                if (data.content && !tmuxHistoryLoaded) {
+                                    // Clear terminal and load full history
+                                    terminal.clear();
+                                    terminal.write('🚀 Loading full tmux history...\r\n\r\n');
+                                    
+                                    // Write the entire tmux content
+                                    terminal.write(data.content);
+                                    
+                                    tmuxHistoryLoaded = true;
+                                    updateMirroringStatus('🚀 Full tmux mirror active');
+                                    console.log('✅ Full tmux history loaded');
+                                }
+                                break;
+                                
+                            case 'tmux-realtime':
+                                // Handle real-time tmux updates
+                                if (data.content && tmuxHistoryLoaded) {
+                                    // Append new content in real-time
+                                    terminal.write(data.content + '\r\n');
+                                }
+                                break;
+                                
+                            case 'tmux-stream':
+                                // Legacy streaming support
+                                console.log('🌊 Legacy streaming content:', data.content);
+                                if (data.content) {
+                                    terminal.write(data.content + '\r\n');
+                                }
+                                break;
+                            case 'streaming-started':
+                                // Mirroring started
+                                updateMirroringStatus('🚀 Aggressive mirroring active');
+                                break;
+                            case 'streaming-stopped':
+                                // Mirroring stopped
+                                updateMirroringStatus('🛑 Mirroring inactive');
+                                break;
+                                
                             default:
                                 console.log('Unknown message type:', data.type, data);
                                 break;
@@ -561,6 +618,15 @@
         console.log('🤖 QQ Terminal initialized');
         console.log(`📡 WebSocket will connect to ws://localhost:9091/terminal/${currentSessionId}`);
         console.log('🎯 Ready for interactive Q sessions!');
+        
+        // 🚀 AGGRESSIVE TMUX MIRRORING FUNCTIONS
+        
+        function updateMirroringStatus(message) {
+            const statusElement = document.getElementById('streamingStatus');
+            if (statusElement) {
+                statusElement.textContent = message;
+            }
+        }
     </script>
 </body>
 </html>

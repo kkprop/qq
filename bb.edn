@@ -30,8 +30,16 @@
              [qq.browser.improved-sendkeys-test :as improved-sendkeys-test]
              [qq.browser.etaoin-direct-test :as etaoin-direct-test]
              [qq.browser.etaoin-websocket-test :as etaoin-ws-test]
+             [qq.browser.streaming-etaoin-test :as streaming-test]  ; Streaming character test
+             [qq.browser.main-terminal-streaming-test :as main-streaming-test]  ; Main terminal streaming integration
+             [qq.browser.auto-streaming-test :as auto-streaming-test]  ; Automatic streaming test
+             [qq.browser.aggressive-mirroring-test :as aggressive-mirroring-test]  ; Aggressive tmux mirroring test
              [qq.browser.manual-typing-debug :as manual-debug]
-             [qq.browser.simple-websocket-test :as simple-ws-test])  ; Simple WebSocket test
+             [qq.browser.simple-websocket-test :as simple-ws-test]  ; Simple WebSocket test
+             [qq.process.monitor :as process-monitor]  ; Process monitoring
+             [qq.process.websocket-bridge :as ws-bridge]  ; Process-to-WebSocket bridge
+             [qq.tmux.websocket-bridge :as tmux-bridge]  ; Tmux-to-WebSocket bridge
+             [qq.tmux.simple-streaming :as simple-streaming])  ; Simple streaming integration
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -271,6 +279,30 @@
   
   test-simple-websocket {:doc "🧪 Simple WebSocket test (no web server dependency)"
                          :task (simple-ws-test/test-websocket-directly)}
+  
+  test-process-monitor {:doc "🔍 Test capturing actual stdout text from process"
+                        :task (process-monitor/test-process-monitor-stdout)}
+  
+  test-websocket-bridge {:doc "🌉 Test process-to-WebSocket bridge"
+                         :task (ws-bridge/test-process-websocket-bridge)}
+  
+  test-tmux-bridge {:doc "🌉 Test tmux-to-WebSocket bridge (cross-platform)"
+                    :task (tmux-bridge/test-tmux-websocket-bridge)}
+  
+  test-simple-streaming {:doc "🌊 Test simple streaming integration"
+                         :task (simple-streaming/test-simple-streaming)}
+  
+  test-streaming-display {:doc "🌊 Test character-by-character streaming display with etaoin"
+                          :task (streaming-test/test-streaming-display)}
+  
+  test-main-terminal-streaming {:doc "🌊 Test integrated streaming in main terminal.html"
+                                :task (main-streaming-test/test-integration)}
+  
+  test-auto-streaming {:doc "🌊 Test automatic streaming with clean display"
+                       :task (auto-streaming-test/test-auto-streaming)}
+  
+  test-aggressive-mirroring {:doc "🚀 Test aggressive tmux mirroring with full history sync"
+                             :task (aggressive-mirroring-test/test-mirroring)}
   
   ;; 🧪 Complete Q&A Flow Testing
   test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"

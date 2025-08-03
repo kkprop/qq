@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌊 Character Streaming Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .terminal-container {
+            background-color: #000000;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .status {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .status.connected {
+            background-color: #0d4f3c;
+            border-left: 4px solid #10b981;
+        }
+        
+        .status.disconnected {
+            background-color: #4f1d1d;
+            border-left: 4px solid #ef4444;
+        }
+        
+        #terminal {
+            width: 100%;
+            height: 600px;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        
+        button:hover {
+            background-color: #2563eb;
+        }
+        
+        button:disabled {
+            background-color: #6b7280;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌊 Character Streaming Terminal</h1>
+            <p>Real-time character-by-character streaming from tmux sessions</p>
+        </div>
+        
+        <div class="status" id="connectionStatus">
+            🔌 Connecting to WebSocket server...
+        </div>
+        
+        <div class="terminal-container">
+            <div id="terminal"></div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="connectWebSocket()">🔌 Connect</button>
+            <button onclick="disconnectWebSocket()">🔌 Disconnect</button>
+            <button onclick="clearTerminal()">🧹 Clear</button>
+            <button onclick="testCharacterStream()">🧪 Test Stream</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    
+    <script>
+        // Initialize terminal
+        const terminal = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: 'Courier New, monospace',
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                selection: '#ffffff40'
+            }
+        });
+        
+        const fitAddon = new FitAddon.FitAddon();
+        terminal.loadAddon(fitAddon);
+        
+        terminal.open(document.getElementById('terminal'));
+        fitAddon.fit();
+        
+        // WebSocket connection
+        let ws = null;
+        let isConnected = false;
+        
+        // Character buffer for streaming effect
+        let characterBuffer = '';
+        let streamingTimeout = null;
+        
+        function updateConnectionStatus(status, message) {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `status ${status}`;
+            statusElement.textContent = message;
+        }
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Already connected');
+                return;
+            }
+            
+            updateConnectionStatus('connecting', '🔌 Connecting to WebSocket server...');
+            
+            // Connect to our definitive WebSocket server
+            ws = new WebSocket('ws://localhost:9091/terminal/streaming');
+            
+            ws.onopen = function(event) {
+                console.log('✅ WebSocket connected');
+                isConnected = true;
+                updateConnectionStatus('connected', '✅ Connected to streaming server');
+                
+                terminal.clear();
+                terminal.writeln('🌊 Character Streaming Terminal Connected!');
+                terminal.writeln('==========================================');
+                terminal.writeln('📡 Real-time character-by-character streaming active');
+                terminal.writeln('🎯 Type in your tmux session to see live streaming');
+                terminal.writeln('');
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('📥 Received:', data);
+                    
+                    // Handle different message types
+                    switch(data.type) {
+                        case 'character':
+                            // Stream individual characters with typing effect
+                            streamCharacter(data.content);
+                            break;
+                            
+                        case 'tmux-stream':
+                            // 🌊 NEW: Handle real-time tmux streaming
+                            console.log('🌊 Streaming tmux content:', data.content);
+                            streamLine(data.content);
+                            break;
+                            
+                        case 'tmux-output':
+                            // Handle line-based output with character streaming
+                            streamLine(data.content);
+                            break;
+                            
+                        case 'batch':
+                            // Handle batch content with streaming effect
+                            streamBatch(data.content);
+                            break;
+                            
+                        case 'streaming-started':
+                            // Handle streaming start confirmation
+                            terminal.write(`\\r\\n🌊 ${data.content}\\r\\n`);
+                            break;
+                            
+                        case 'streaming-stopped':
+                            // Handle streaming stop confirmation
+                            terminal.write(`\\r\\n🛑 ${data.content}\\r\\n`);
+                            break;
+                            
+                        case 'streaming-status':
+                            // Handle streaming status
+                            terminal.write(`\\r\\n📊 ${data.content} - Active clients: ${data.clients || 0}\\r\\n`);
+                            break;
+                            
+                        default:
+                            // Fallback: stream any content
+                            if (data.content) {
+                                streamLine(data.content);
+                            }
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error parsing WebSocket message:', error);
+                    terminal.write('❌ Error: Invalid message format\\r\\n');
+                }
+            };
+            
+            ws.onclose = function(event) {
+                console.log('🔌 WebSocket disconnected');
+                isConnected = false;
+                updateConnectionStatus('disconnected', '🔌 Disconnected from server');
+                
+                if (!event.wasClean) {
+                    terminal.writeln('\\r\\n🔌 Connection lost. Attempting to reconnect...');
+                    // Auto-reconnect after 3 seconds
+                    setTimeout(connectWebSocket, 3000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('❌ WebSocket error:', error);
+                updateConnectionStatus('disconnected', '❌ Connection error');
+            };
+        }
+        
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            isConnected = false;
+            updateConnectionStatus('disconnected', '🔌 Disconnected');
+        }
+        
+        function clearTerminal() {
+            terminal.clear();
+        }
+        
+        // Character-by-character streaming functions
+        function streamCharacter(char) {
+            // Write character immediately for true real-time effect
+            terminal.write(char);
+        }
+        
+        function streamLine(line) {
+            // Stream line character by character with typing effect
+            let index = 0;
+            
+            function typeNextChar() {
+                if (index < line.length) {
+                    terminal.write(line[index]);
+                    index++;
+                    // Adjust speed: faster for normal text, slower for dramatic effect
+                    const delay = Math.random() * 20 + 10; // 10-30ms per character
+                    setTimeout(typeNextChar, delay);
+                } else {
+                    // Add newline after line is complete
+                    terminal.write('\\r\\n');
+                }
+            }
+            
+            typeNextChar();
+        }
+        
+        function streamBatch(content) {
+            // Stream batch content with realistic typing speed
+            let index = 0;
+            
+            function typeNextChar() {
+                if (index < content.length) {
+                    const char = content[index];
+                    terminal.write(char);
+                    index++;
+                    
+                    // Variable speed based on character type
+                    let delay = 15; // Default speed
+                    if (char === '\\n' || char === '\\r') {
+                        delay = 50; // Pause at line breaks
+                    } else if (char === ' ') {
+                        delay = 30; // Slight pause at spaces
+                    } else if (char.match(/[.!?]/)) {
+                        delay = 100; // Longer pause at sentence endings
+                    }
+                    
+                    setTimeout(typeNextChar, delay);
+                }
+            }
+            
+            typeNextChar();
+        }
+        
+        function testCharacterStream() {
+            // Test the character streaming effect
+            const testMessage = "🧪 Testing character-by-character streaming...\\r\\n" +
+                               "This simulates real-time typing effect!\\r\\n" +
+                               "Each character appears individually with realistic timing.\\r\\n";
+            
+            streamBatch(testMessage);
+        }
+        
+        // Auto-connect on page load
+        window.addEventListener('load', function() {
+            setTimeout(connectWebSocket, 1000);
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            fitAddon.fit();
+        });
+    </script>
+</body>
+</html>

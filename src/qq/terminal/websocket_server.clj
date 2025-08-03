@@ -1,24 +1,296 @@
 (ns qq.terminal.websocket-server
-  "🚀 THE Definitive WebSocket Server - Complete End-to-End Q&A Flow
+  "🚀 THE Definitive WebSocket Server - Complete End-to-End Q&A Flow + Streaming
   
   This is THE ONLY WebSocket server implementation we need.
   Features:
   - Working WebSocket handshake
   - Complete WebSocket frame processing  
   - Proper Q&A boundaries (uses qq.tmux/send-and-wait-improved)
+  - 🌊 TMUX STREAMING: Real-time character streaming from tmux sessions
   - Clean architecture (no nested try-catch hell)
   
   No more confusion about which server to use!"
   (:require [clojure.string :as str]
             [clojure.data.json :as json]
+            [clojure.core.async :as async]
+            [babashka.process :as p]
+            [clojure.java.io :as io]
             [qq.tmux :as tmux])
   (:import [java.net ServerSocket]
            [java.io PrintWriter BufferedReader InputStreamReader]
            [java.util.concurrent Executors]
            [java.security MessageDigest]
-           [java.util Base64]))
+           [java.util Base64]
+           [java.io File]))
 
-(def server-state (atom {:running false :server nil}))
+(def server-state (atom {:running false :server nil :streaming-sessions {}}))
+
+;; 🌊 STREAMING FUNCTIONS (Defined early for use in message handling)
+
+;; Forward declarations
+(declare send-websocket-frame)
+
+(defn clean-streaming-content
+  "Clean streaming content by removing ANSI escape sequences and spinner chars"
+  [content]
+  (-> content
+      ;; Remove ANSI escape sequences
+      (str/replace #"\u001B\[[0-9;]*[mK]" "")
+      ;; Remove spinner characters (Braille patterns)
+      (str/replace #"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]" "")
+      ;; Remove carriage returns that cause overwriting
+      (str/replace #"\r" "")
+      ;; Remove excessive dots and spaces
+      (str/replace #"\.{3,}" "...")
+      ;; Clean up multiple spaces
+      (str/replace #" {2,}" " ")
+      ;; Remove empty lines
+      (str/replace #"\n\s*\n" "\n")))
+
+;; 🚀 AGGRESSIVE TMUX MIRRORING FUNCTIONS
+
+;; Store active WebSocket clients for mirroring
+(def streaming-clients (atom #{}))
+
+(defn add-streaming-client [client-socket]
+  "Add a client socket to streaming clients"
+  (swap! streaming-clients conj client-socket)
+  (println (str "📡 Added mirroring client. Total clients: " (count @streaming-clients))))
+
+(defn remove-streaming-client [client-socket]
+  "Remove a client socket from streaming clients"
+  (swap! streaming-clients disj client-socket)
+  (println (str "📡 Removed mirroring client. Total clients: " (count @streaming-clients))))
+
+(defn broadcast-to-streaming-clients [message]
+  "Broadcast message to all streaming clients"
+  (doseq [client-socket @streaming-clients]
+    (try
+      (let [output-stream (.getOutputStream client-socket)
+            json-message (json/write-str message)]
+        (send-websocket-frame output-stream json-message))
+      (catch Exception e
+        (println (str "❌ Error broadcasting to client: " (.getMessage e)))
+        ;; Remove failed client
+        (remove-streaming-client client-socket)))))
+
+(defn capture-full-tmux-history
+  "Capture the entire tmux scrollback history"
+  [session-name]
+  (println (str "📜 Capturing full tmux history for: " session-name))
+  (try
+    ;; Capture entire scrollback buffer (-S - means from beginning)
+    (let [result (p/process ["tmux" "capture-pane" "-t" session-name "-S" "-" "-p"] 
+                            {:out :string})]
+      (if (= 0 (:exit @result))
+        (let [full-content (:out @result)]
+          (println (str "✅ Captured " (count (str/split-lines full-content)) " lines of history"))
+          full-content)
+        (do
+          (println (str "❌ Failed to capture history: " (:err @result)))
+          "")))
+    (catch Exception e
+      (println (str "❌ Error capturing tmux history: " (.getMessage e)))
+      "")))
+
+(defn sync-full-tmux-content
+  "Send the entire tmux content to a WebSocket client"
+  [client-socket session-name]
+  (println (str "🔄 Syncing full tmux content to client"))
+  (try
+    (let [full-content (capture-full-tmux-history session-name)
+          cleaned-content (clean-streaming-content full-content)]
+      (when (not (str/blank? cleaned-content))
+        (let [message {:type "tmux-full-sync"
+                       :content cleaned-content
+                       :session session-name
+                       :timestamp (System/currentTimeMillis)}]
+          (println (str "📡 Sending full sync: " (count (str/split-lines cleaned-content)) " lines"))
+          ;; Send directly to this client
+          (let [output-stream (.getOutputStream client-socket)
+                json-message (json/write-str message)]
+            (send-websocket-frame output-stream json-message)))))
+    (catch Exception e
+      (println (str "❌ Error syncing full content: " (.getMessage e))))))
+
+(defn start-aggressive-file-monitoring
+  "Monitor file changes for aggressive real-time mirroring"
+  [output-file session-name]
+  (println (str "👁️ Starting aggressive file monitoring: " output-file))
+  
+  (async/go
+    (try
+      (let [tail-process (p/process ["tail" "-f" output-file] {:out :stream})]
+        (with-open [reader (io/reader (:out tail-process))]
+          (loop []
+            (when-let [line (.readLine reader)]
+              ;; For aggressive mirroring, send ALL content (minimal filtering)
+              (let [cleaned-content (-> line
+                                        ;; Only remove the most problematic chars
+                                        (str/replace #"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]" "")
+                                        (str/replace #"\r" ""))]
+                (when (not (str/blank? cleaned-content))
+                  (let [message {:type "tmux-realtime"
+                                 :content cleaned-content
+                                 :session session-name
+                                 :timestamp (System/currentTimeMillis)}]
+                    (println (str "📡 Aggressive mirror: " (subs cleaned-content 0 (min 80 (count cleaned-content))) "..."))
+                    (broadcast-to-streaming-clients message))))
+              (recur)))))
+      
+      (catch Exception e
+        (println (str "❌ Error in aggressive file monitoring: " (.getMessage e)))))))
+
+(defn start-aggressive-tmux-mirroring
+  "Start aggressive tmux mirroring with full history sync"
+  [session-name client-socket]
+  (println (str "🚀 Starting AGGRESSIVE tmux mirroring for: " session-name))
+  
+  ;; Step 1: Sync existing content immediately
+  (sync-full-tmux-content client-socket session-name)
+  
+  ;; Step 2: Start real-time streaming
+  (add-streaming-client client-socket)
+  
+  (let [output-file (str "/tmp/tmux-mirror-" session-name ".log")]
+    
+    ;; Clean up existing file
+    (when (.exists (File. output-file))
+      (.delete (File. output-file)))
+    
+    ;; Create empty file
+    (spit output-file "")
+    
+    ;; Start tmux pipe-pane for real-time updates
+    (try
+      (let [result (p/process ["tmux" "pipe-pane" "-t" session-name "-o" (str "cat >> " output-file)] 
+                              {:out :string})]
+        (if (= 0 (:exit @result))
+          (do
+            (println (str "✅ Aggressive mirroring started: " session-name " → " output-file))
+            
+            ;; Start file monitoring for real-time updates
+            (start-aggressive-file-monitoring output-file session-name)
+            
+            ;; Store mirroring info
+            (swap! server-state assoc-in [:streaming-sessions session-name] 
+                   {:output-file output-file
+                    :status :mirroring
+                    :started (System/currentTimeMillis)
+                    :clients (count @streaming-clients)
+                    :mode :aggressive})
+            
+            {:session session-name
+             :output-file output-file
+             :status :mirroring
+             :mode :aggressive})
+          
+          (do
+            (println (str "❌ Failed to start aggressive mirroring: " (:err @result)))
+            (remove-streaming-client client-socket)
+            nil)))
+      
+      (catch Exception e
+        (println (str "❌ Error starting aggressive mirroring: " (.getMessage e)))
+        (remove-streaming-client client-socket)
+        nil))))
+
+;; Update the existing functions to use aggressive mirroring
+
+(defn start-file-monitoring
+  "Start monitoring a file and stream changes to WebSocket clients"
+  [output-file session-name]
+  (println (str "👀 Starting file monitoring: " output-file))
+  
+  (async/go
+    (try
+      (let [tail-process (p/process ["tail" "-f" output-file] {:out :stream})]
+        (with-open [reader (io/reader (:out tail-process))]
+          (loop []
+            (when-let [line (.readLine reader)]
+              ;; Clean the content before streaming
+              (let [cleaned-content (clean-streaming-content line)]
+                (when (and (not (str/blank? cleaned-content))
+                          (> (count cleaned-content) 2)) ; Only stream meaningful content
+                  (let [message {:type "tmux-stream"
+                                 :content cleaned-content
+                                 :session session-name
+                                 :timestamp (System/currentTimeMillis)}]
+                    (println (str "📡 Streaming clean line: " (subs cleaned-content 0 (min 50 (count cleaned-content))) "..."))
+                    (broadcast-to-streaming-clients message))))
+              (recur)))))
+      
+      (catch Exception e
+        (println (str "❌ Error in file monitoring: " (.getMessage e)))))))
+
+(defn start-tmux-streaming
+  "Start streaming from a tmux session to WebSocket clients"
+  [session-name client-socket]
+  (println (str "🌊 Starting tmux streaming for session: " session-name))
+  
+  ;; Add client to streaming clients
+  (add-streaming-client client-socket)
+  
+  (let [output-file (str "/tmp/tmux-stream-" session-name ".log")]
+    
+    ;; Clean up existing file
+    (when (.exists (File. output-file))
+      (.delete (File. output-file)))
+    
+    ;; Create empty file
+    (spit output-file "")
+    
+    ;; Start tmux pipe-pane
+    (try
+      (let [result (p/process ["tmux" "pipe-pane" "-t" session-name "-o" (str "cat >> " output-file)] 
+                              {:out :string})]
+        (if (= 0 (:exit @result))
+          (do
+            (println (str "✅ Tmux pipe-pane started: " session-name " → " output-file))
+            
+            ;; Start file monitoring and streaming
+            (start-file-monitoring output-file session-name)
+            
+            ;; Store streaming info
+            (swap! server-state assoc-in [:streaming-sessions session-name] 
+                   {:output-file output-file
+                    :status :streaming
+                    :started (System/currentTimeMillis)
+                    :clients (count @streaming-clients)})
+            
+            {:session session-name
+             :output-file output-file
+             :status :streaming})
+          
+          (do
+            (println (str "❌ Failed to start pipe-pane: " (:err @result)))
+            (remove-streaming-client client-socket)
+            nil)))
+      
+      (catch Exception e
+        (println (str "❌ Error starting tmux streaming: " (.getMessage e)))
+        (remove-streaming-client client-socket)
+        nil))))
+
+(defn stop-tmux-streaming
+  "Stop streaming from a tmux session"
+  [session-name]
+  (println (str "🛑 Stopping tmux streaming for session: " session-name))
+  
+  (try
+    (p/process ["tmux" "pipe-pane" "-t" session-name] {:out :string})
+    (println "✅ Tmux pipe-pane stopped")
+    
+    ;; Remove from streaming sessions
+    (swap! server-state update :streaming-sessions dissoc session-name)
+    
+    (catch Exception e
+      (println (str "❌ Error stopping streaming: " (.getMessage e))))))
+
+(defn get-streaming-sessions
+  "Get all active streaming sessions"
+  []
+  (:streaming-sessions @server-state))
 
 (defn- websocket-accept-key [client-key]
   "Generate WebSocket accept key"
@@ -176,8 +448,8 @@
       (println (str "❌ Q&A Failed: " (.getMessage e)))
       {:success false :error (str "Q&A failed: " (.getMessage e))})))
 
-(defn- handle-websocket-message [message-data]
-  "Handle incoming WebSocket message"
+(defn- handle-websocket-message [message-data client-socket]
+  "Handle incoming WebSocket message with streaming support"
   (try
     (let [parsed (json/read-str message-data :key-fn keyword)
           command (:content parsed)
@@ -194,6 +466,36 @@
         
         "ping"
         {:type "pong" :content "Server alive"}
+        
+        ;; 🌊 NEW: Start streaming from tmux session
+        "start-streaming"
+        (let [session-name (or (:session parsed) "qq-default")]
+          (if-let [stream-info (start-tmux-streaming session-name client-socket)]
+            {:type "streaming-started" 
+             :content (str "Started streaming from " session-name)
+             :session session-name
+             :success true}
+            {:type "error" 
+             :content (str "Failed to start streaming from " session-name)
+             :success false}))
+        
+        ;; 🛑 NEW: Stop streaming from tmux session  
+        "stop-streaming"
+        (let [session-name (or (:session parsed) "qq-default")]
+          (remove-streaming-client client-socket)
+          (stop-tmux-streaming session-name)
+          {:type "streaming-stopped"
+           :content (str "Stopped streaming from " session-name)
+           :session session-name
+           :success true})
+        
+        ;; 📋 NEW: Get streaming status
+        "streaming-status"
+        {:type "streaming-status"
+         :content "Streaming sessions"
+         :sessions (get-streaming-sessions)
+         :clients (count @streaming-clients)
+         :success true}
         
         ;; Default case
         {:type "error" :content "Unknown message type"}))
@@ -235,6 +537,14 @@
                       
                       (println (str "✅ WebSocket handshake completed [" connection-id "]"))
                       
+                      ;; 🚀 AGGRESSIVE TMUX MIRRORING for maximum UX
+                      (println (str "🚀 Starting AGGRESSIVE tmux mirroring for connection [" connection-id "]"))
+                      (try
+                        (start-aggressive-tmux-mirroring "qq-default" client-socket)
+                        (println (str "✅ Aggressive mirroring started for [" connection-id "]"))
+                      (catch Exception e
+                        (println (str "❌ Aggressive mirroring failed for [" connection-id "]: " (.getMessage e)))))
+                      
                       ;; Process WebSocket messages with proper binary I/O
                       (println (str "🔄 Starting WebSocket message processing [" connection-id "]..."))
                       (let [input-stream (.getInputStream client-socket)
@@ -246,7 +556,7 @@
                             (println (str "📨 Processing WebSocket message [" connection-id "]: " message))
                             
                             ;; Handle the message and get response
-                            (let [response (handle-websocket-message message)]
+                            (let [response (handle-websocket-message message client-socket)]
                               (println (str "📤 Sending response [" connection-id "]: " response))
                               (send-websocket-frame output-stream (json/write-str response))))
                           

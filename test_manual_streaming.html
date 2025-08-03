@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🌊 Manual Streaming Test</title>
+    <style>
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+        #output { border: 1px solid #0f0; padding: 10px; height: 400px; overflow-y: auto; }
+        button { background: #0f0; color: #000; padding: 10px; margin: 5px; }
+        .status { color: #ff0; }
+        .error { color: #f00; }
+        .stream { color: #0ff; }
+    </style>
+</head>
+<body>
+    <h1>🌊 Manual Streaming Test</h1>
+    <div>
+        <button onclick="startStreaming()">Start Streaming</button>
+        <button onclick="stopStreaming()">Stop Streaming</button>
+        <button onclick="getStatus()">Get Status</button>
+        <button onclick="clearOutput()">Clear</button>
+    </div>
+    <div id="output"></div>
+
+    <script>
+        let ws = null;
+        const output = document.getElementById('output');
+        
+        function log(message, className = '') {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            if (className) div.className = className;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            output.innerHTML = '';
+        }
+        
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket('ws://localhost:9091/terminal/streaming');
+            
+            ws.onopen = function() {
+                log('✅ Connected to WebSocket server', 'status');
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    log('📥 Received: ' + JSON.stringify(data));
+                    
+                    if (data.type === 'tmux-stream') {
+                        log('🌊 STREAMING: ' + data.content, 'stream');
+                    }
+                } catch (error) {
+                    log('❌ Parse error: ' + error.message, 'error');
+                }
+            };
+            
+            ws.onclose = function() {
+                log('🔌 Connection closed', 'status');
+            };
+            
+            ws.onerror = function(error) {
+                log('❌ WebSocket error: ' + error.message, 'error');
+            };
+        }
+        
+        function startStreaming() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'start-streaming',
+                    session: 'qq-default'
+                };
+                ws.send(JSON.stringify(message));
+                log('📤 Sent start-streaming message');
+            } else {
+                log('❌ WebSocket not connected', 'error');
+            }
+        }
+        
+        function stopStreaming() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'stop-streaming',
+                    session: 'qq-default'
+                };
+                ws.send(JSON.stringify(message));
+                log('📤 Sent stop-streaming message');
+            } else {
+                log('❌ WebSocket not connected', 'error');
+            }
+        }
+        
+        function getStatus() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'streaming-status'
+                };
+                ws.send(JSON.stringify(message));
+                log('📤 Sent streaming-status message');
+            } else {
+                log('❌ WebSocket not connected', 'error');
+            }
+        }
+        
+        // Auto-connect on load
+        connect();
+        
+        log('🌊 Manual Streaming Test Ready');
+        log('Click "Start Streaming" then run commands in tmux qq-default session');
+    </script>
+</body>
+</html>
