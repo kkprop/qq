@@ -232,8 +232,8 @@
   [session-name client-socket]
   (println (str "🚀 Starting AGGRESSIVE tmux mirroring for: " session-name))
   
-  ;; Step 1: Send simple test message first
-  (sync-full-tmux-content-simple client-socket session-name)
+  ;; Step 1: Sync existing content immediately with chunked delivery
+  (sync-full-tmux-content client-socket session-name)
   
   ;; Step 2: Start real-time streaming
   (add-streaming-client client-socket)
