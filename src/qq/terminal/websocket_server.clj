@@ -113,6 +113,29 @@
     (catch Exception e
       (println (str "❌ Error syncing full content: " (.getMessage e))))))
 
+(defn ensure-pipe-pane-active
+  "Ensure tmux pipe-pane is active, restart if needed"
+  [session-name output-file]
+  (try
+    ;; Check if pipe-pane is active
+    (let [result (p/process ["tmux" "list-panes" "-t" session-name "-F" "#{pane_pipe}"] 
+                            {:out :string})]
+      (if (= 0 (:exit @result))
+        (let [pipe-status (str/trim (:out @result))]
+          (if (= "0" pipe-status)
+            (do
+              (println (str "🔧 Pipe-pane inactive for " session-name ", restarting..."))
+              ;; Restart pipe-pane
+              (let [restart-result (p/process ["tmux" "pipe-pane" "-t" session-name "-o" (str "cat >> " output-file)] 
+                                              {:out :string})]
+                (if (= 0 (:exit @restart-result))
+                  (println (str "✅ Pipe-pane restarted for " session-name))
+                  (println (str "❌ Failed to restart pipe-pane: " (:err @restart-result))))))
+            (println (str "✅ Pipe-pane already active for " session-name))))
+        (println (str "❌ Failed to check pipe-pane status: " (:err @result)))))
+    (catch Exception e
+      (println (str "❌ Error checking pipe-pane: " (.getMessage e))))))
+
 (defn start-aggressive-file-monitoring
   "Monitor file changes for aggressive real-time mirroring"
   [output-file session-name]
@@ -143,8 +166,22 @@
       (catch Exception e
         (println (str "❌ Error in aggressive file monitoring: " (.getMessage e)))))))
 
+(defn restart-pipe-pane-if-needed
+  "Check and restart pipe-pane if it's inactive"
+  [session-name output-file]
+  (try
+    (let [result (p/process ["tmux" "list-panes" "-t" session-name "-F" "#{pane_pipe}"] {:out :string})]
+      (when (= 0 (:exit @result))
+        (let [pipe-status (str/trim (:out @result))]
+          (when (= "0" pipe-status)
+            (println (str "🔧 Restarting inactive pipe-pane for " session-name))
+            (p/process ["tmux" "pipe-pane" "-t" session-name "-o" (str "cat >> " output-file)] {:out :string})
+            (println (str "✅ Pipe-pane restarted for " session-name))))))
+    (catch Exception e
+      (println (str "❌ Error restarting pipe-pane: " (.getMessage e))))))
+
 (defn start-aggressive-tmux-mirroring
-  "Start aggressive tmux mirroring with full history sync"
+  "Start aggressive tmux mirroring with full history sync and pipe-pane monitoring"
   [session-name client-socket]
   (println (str "🚀 Starting AGGRESSIVE tmux mirroring for: " session-name))
   
@@ -162,6 +199,9 @@
     
     ;; Create empty file
     (spit output-file "")
+    
+    ;; Ensure pipe-pane is active
+    (restart-pipe-pane-if-needed session-name output-file)
     
     ;; Start tmux pipe-pane for real-time updates
     (try
