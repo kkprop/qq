@@ -94,21 +94,47 @@
       "")))
 
 (defn sync-full-tmux-content
-  "Send the entire tmux content to a WebSocket client"
+  "Send the entire tmux content to a WebSocket client in chunks to avoid broken pipe"
   [client-socket session-name]
   (println (str "🔄 Syncing full tmux content to client"))
   (try
     (let [full-content (capture-full-tmux-history session-name)
           cleaned-content (clean-streaming-content full-content)]
       (when (not (str/blank? cleaned-content))
-        (let [message {:type "tmux-full-sync"
-                       :content cleaned-content
-                       :session session-name
-                       :timestamp (System/currentTimeMillis)}]
-          (println (str "📡 Sending full sync: " (count (str/split-lines cleaned-content)) " lines"))
-          ;; Send directly to this client
-          (let [output-stream (.getOutputStream client-socket)
-                json-message (json/write-str message)]
+        ;; Split content into smaller chunks to avoid WebSocket frame size issues
+        (let [lines (str/split-lines cleaned-content)
+              chunk-size 50] ; Send 50 lines at a time
+          (println (str "📡 Sending full sync in chunks: " (count lines) " lines, " 
+                       (Math/ceil (/ (count lines) chunk-size)) " chunks"))
+          
+          ;; Send initial sync message
+          (let [initial-message {:type "tmux-full-sync-start"
+                                :total-lines (count lines)
+                                :session session-name
+                                :timestamp (System/currentTimeMillis)}
+                output-stream (.getOutputStream client-socket)
+                json-message (json/write-str initial-message)]
+            (send-websocket-frame output-stream json-message))
+          
+          ;; Send content in chunks
+          (doseq [chunk-lines (partition-all chunk-size lines)]
+            (let [chunk-content (str/join "\n" chunk-lines)
+                  message {:type "tmux-full-sync-chunk"
+                           :content chunk-content
+                           :session session-name
+                           :timestamp (System/currentTimeMillis)}
+                  output-stream (.getOutputStream client-socket)
+                  json-message (json/write-str message)]
+              (send-websocket-frame output-stream json-message)
+              ;; Small delay between chunks to prevent overwhelming
+              (Thread/sleep 50)))
+          
+          ;; Send completion message
+          (let [complete-message {:type "tmux-full-sync-complete"
+                                 :session session-name
+                                 :timestamp (System/currentTimeMillis)}
+                output-stream (.getOutputStream client-socket)
+                json-message (json/write-str complete-message)]
             (send-websocket-frame output-stream json-message)))))
     (catch Exception e
       (println (str "❌ Error syncing full content: " (.getMessage e))))))

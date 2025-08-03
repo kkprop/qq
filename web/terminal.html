@@ -192,6 +192,7 @@
         // 🚀 Aggressive tmux mirroring state
         let aggressiveMirroringActive = true;
         let tmuxHistoryLoaded = false;
+        let syncInProgress = false;
         let cursorPosition = 0;
         let commandHistory = [];
         let historyIndex = -1;
@@ -279,21 +280,47 @@
                                 // Handle pong silently
                                 break;
                             
-                            // 🚀 AGGRESSIVE TMUX MIRRORING message types
+                            // 🚀 AGGRESSIVE TMUX MIRRORING message types (chunked)
+                            case 'tmux-full-sync-start':
+                                // Handle start of chunked full tmux history sync
+                                console.log('🚀 Starting chunked full tmux sync:', data.totalLines, 'lines');
+                                if (!tmuxHistoryLoaded && !syncInProgress) {
+                                    // Clear terminal and prepare for chunked loading
+                                    terminal.clear();
+                                    terminal.write('🚀 Loading full tmux history in chunks...\r\n\r\n');
+                                    syncInProgress = true;
+                                    updateMirroringStatus('🚀 Loading history chunks...');
+                                }
+                                break;
+                                
+                            case 'tmux-full-sync-chunk':
+                                // Handle individual chunks of tmux history
+                                if (data.content && syncInProgress) {
+                                    // Write chunk content without extra newlines
+                                    terminal.write(data.content + '\r\n');
+                                }
+                                break;
+                                
+                            case 'tmux-full-sync-complete':
+                                // Handle completion of chunked sync
+                                console.log('✅ Chunked full tmux sync completed');
+                                if (syncInProgress) {
+                                    tmuxHistoryLoaded = true;
+                                    syncInProgress = false;
+                                    updateMirroringStatus('🚀 Full tmux mirror active');
+                                    console.log('✅ Full tmux history loaded via chunks');
+                                }
+                                break;
+                                
                             case 'tmux-full-sync':
-                                // Handle full tmux history sync
-                                console.log('🚀 Full tmux sync received:', data.content.length, 'characters');
+                                // Legacy single-message sync support
+                                console.log('🚀 Legacy full tmux sync received:', data.content.length, 'characters');
                                 if (data.content && !tmuxHistoryLoaded) {
-                                    // Clear terminal and load full history
                                     terminal.clear();
                                     terminal.write('🚀 Loading full tmux history...\r\n\r\n');
-                                    
-                                    // Write the entire tmux content
                                     terminal.write(data.content);
-                                    
                                     tmuxHistoryLoaded = true;
                                     updateMirroringStatus('🚀 Full tmux mirror active');
-                                    console.log('✅ Full tmux history loaded');
                                 }
                                 break;
                                 
