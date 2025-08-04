@@ -553,7 +553,7 @@
   "Get list of windows that have active viewers"
   (let [subscriptions (vals @user-window-subscriptions)
         session-subs (filter #(= (:session %) session-name) subscriptions)
-        active-windows (distinct (map :window session-subs))]
+        active-windows (vec (distinct (map :window session-subs)))]
     (println (str "📋 Active windows for " session-name ": " active-windows))
     active-windows))
 
@@ -617,9 +617,9 @@
     ;; Create empty file
     (spit output-file "")
     
-    ;; Start tmux pipe-pane for specific window with ANSI formatting
+    ;; Start tmux pipe-pane for specific window (pipe-pane doesn't support -e flag)
     (try
-      (let [result (p/process ["tmux" "pipe-pane" "-t" window-target "-e" "-O" output-file]
+      (let [result (p/process ["tmux" "pipe-pane" "-t" window-target "-O" output-file]
                              {:out :string :err :string})]
         (if (= 0 (:exit @result))
           (do
