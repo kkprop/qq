@@ -443,12 +443,31 @@
             
             if (xtermViewport) {
                 console.log('✅ Found xterm viewport for scrolling');
+                console.log('📊 Viewport dimensions:', {
+                    scrollHeight: xtermViewport.scrollHeight,
+                    clientHeight: xtermViewport.clientHeight,
+                    scrollTop: xtermViewport.scrollTop
+                });
+                
+                // Ensure terminal is properly fitted
+                try {
+                    fitAddon.fit();
+                    console.log('✅ Terminal refitted for scrolling');
+                } catch (e) {
+                    console.log('⚠️ Terminal fit error:', e);
+                }
                 
                 xtermViewport.addEventListener('scroll', function(e) {
                     const scrollTop = xtermViewport.scrollTop;
                     const scrollHeight = xtermViewport.scrollHeight;
                     
-                    console.log('📜 Scroll position:', scrollTop, '/', scrollHeight);
+                    console.log('📜 Scroll event:', {
+                        scrollTop: scrollTop,
+                        scrollHeight: scrollHeight,
+                        clientHeight: xtermViewport.clientHeight,
+                        loadedHistoryLines: loadedHistoryLines,
+                        totalHistoryLines: totalHistoryLines
+                    });
                     
                     if (scrollTop < 200 && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
                         console.log('🔄 Loading more history...');
@@ -457,7 +476,19 @@
                 });
                 
                 console.log('✅ Scroll detection setup complete');
+                
+                // Test scroll functionality
+                setTimeout(() => {
+                    console.log('🧪 Testing scroll to bottom...');
+                    xtermViewport.scrollTop = xtermViewport.scrollHeight;
+                    console.log('📊 After scroll test:', {
+                        scrollTop: xtermViewport.scrollTop,
+                        scrollHeight: xtermViewport.scrollHeight
+                    });
+                }, 2000);
+                
             } else {
+                console.log('❌ xterm viewport not found, retrying...');
                 setTimeout(setupScrollDetection, 2000);
             }
         }
@@ -498,13 +529,47 @@
         console.log(`📡 WebSocket will connect to ws://localhost:9091/terminal/${currentSessionId}`);
         console.log('🎯 Ready for pure tmux mirroring!');
         
+        // Add some test content to ensure scrolling works
+        terminal.writeln('🧪 SCROLL TEST - Adding content to test scrolling...');
+        for (let i = 1; i <= 50; i++) {
+            terminal.writeln(`📜 Test line ${i} - This is test content to ensure scrolling works properly`);
+        }
+        terminal.writeln('🎯 End of test content - scroll should work now');
+        terminal.writeln('');
+        
         // Auto-connect
         connectWebSocket();
         
         // Handle window resize
         window.addEventListener('resize', () => {
             fitAddon.fit();
+            console.log('🔧 Terminal refitted on window resize');
         });
+        
+        // Manual scroll test function (for debugging)
+        window.testScroll = function() {
+            const xtermViewport = document.querySelector('.xterm-viewport');
+            if (xtermViewport) {
+                console.log('🧪 Manual scroll test');
+                console.log('Before:', {
+                    scrollTop: xtermViewport.scrollTop,
+                    scrollHeight: xtermViewport.scrollHeight,
+                    clientHeight: xtermViewport.clientHeight
+                });
+                
+                xtermViewport.scrollTop = 0; // Scroll to top
+                setTimeout(() => {
+                    console.log('After scroll to top:', {
+                        scrollTop: xtermViewport.scrollTop,
+                        scrollHeight: xtermViewport.scrollHeight
+                    });
+                }, 100);
+            } else {
+                console.log('❌ No viewport found for manual test');
+            }
+        };
+        
+        console.log('💡 Use testScroll() in console to manually test scrolling');
     </script>
 </body>
 </html>
