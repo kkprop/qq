@@ -416,13 +416,15 @@
   "Create a new window in tmux session"
   (try
     (let [result (p/process ["tmux" "new-window" "-t" session-name]
-                           {:out :string})]
+                           {:out :string :err :string})]
       (if (= 0 (:exit @result))
         (do
           (println (str "✅ Created new window in session " session-name))
           true)
         (do
-          (println (str "❌ Failed to create window: " (:err @result)))
+          (println (str "❌ Failed to create window in session " session-name))
+          (println (str "   Exit code: " (:exit @result)))
+          (println (str "   Error output: " (:err @result)))
           false)))
     (catch Exception e
       (println (str "❌ Error creating window: " (.getMessage e)))
@@ -815,11 +817,13 @@
         "command"
         (do
           ;; Get current window from client (which window user is viewing)
-          (let [session-name (or (:session parsed) "qq-default")
+          (let [session-name (if (= (:session parsed) "default") 
+                              "qq-default"  ; Map "default" to "qq-default"
+                              (or (:session parsed) "qq-default"))
                 current-window (or (:currentWindow parsed) 2) ; Default to window 2
                 routing (route-command command session-name current-window)]
             
-            (println (str "📍 Smart routing: " (:type routing) " → window " (:window routing)))
+            (println (str "📍 Smart routing: " (:type routing) " → window " (:window routing) " in session " session-name))
             
             ;; Record command for echo filtering
             (record-sent-command session-id command)
