@@ -529,6 +529,78 @@
       (catch Exception e
         (println (str "❌ Error in file monitoring: " (.getMessage e)))))))
 
+;; User window subscription tracking
+(def user-window-subscriptions (atom {}))
+;; Format: {"client-id" {:session "qq-default" :window 1}}
+
+(defn subscribe-user-to-window [client-socket session-name window-index]
+  "Subscribe a user to a specific window for streaming"
+  (let [client-id (str (.hashCode client-socket))]
+    (swap! user-window-subscriptions assoc client-id 
+           {:session session-name :window window-index :socket client-socket})
+    (println (str "📺 User " client-id " subscribed to " session-name ":" window-index))
+    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
+
+(defn unsubscribe-user [client-socket]
+  "Remove user's window subscription"
+  (let [client-id (str (.hashCode client-socket))]
+    (swap! user-window-subscriptions dissoc client-id)
+    (println (str "📺 User " client-id " unsubscribed"))
+    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
+
+(defn get-active-windows [session-name]
+  "Get list of windows that have active viewers"
+  (let [subscriptions (vals @user-window-subscriptions)
+        session-subs (filter #(= (:session %) session-name) subscriptions)
+        active-windows (distinct (map :window session-subs))]
+    (println (str "📋 Active windows for " session-name ": " active-windows))
+    active-windows))
+
+(defn broadcast-to-window-viewers [session-name window-index message]
+  "Send message only to users viewing specific window"
+  (let [viewers (filter (fn [[client-id subscription]]
+                         (and (= (:session subscription) session-name)
+                              (= (:window subscription) window-index)))
+                       @user-window-subscriptions)]
+    (doseq [[client-id subscription] viewers]
+      (try
+        (send-websocket-frame (:socket subscription) (json/write-str message))
+        (println (str "📤 Sent window update to user " client-id " for window " window-index))
+        (catch Exception e
+          (println (str "❌ Failed to send to user " client-id ": " (.getMessage e)))
+          ;; Remove dead connection
+          (unsubscribe-user (:socket subscription)))))
+    (count viewers)))
+
+(defn start-window-file-monitoring
+  "Monitor tmux window output file and broadcast to subscribed users"
+  [session-name window-index output-file]
+  (future
+    (try
+      (println (str "📁 Starting file monitoring for window " session-name ":" window-index))
+      (let [file (File. output-file)]
+        (loop [last-content ""]
+          (Thread/sleep 100) ; Check every 100ms
+          (when (.exists file)
+            (let [current-content (try (slurp output-file) (catch Exception e ""))]
+              (when (not= current-content last-content)
+                ;; New content available
+                (let [new-content (if (str/starts-with? current-content last-content)
+                                   (subs current-content (count last-content))
+                                   current-content)] ; Full content if file was truncated
+                  ;; Broadcast to users viewing this specific window
+                  (when (not (str/blank? new-content))
+                    (let [viewers-count (broadcast-to-window-viewers session-name window-index 
+                                                                   {:type "window-stream"
+                                                                    :session session-name
+                                                                    :window window-index
+                                                                    :content new-content})]
+                      (when (> viewers-count 0)
+                        (println (str "📤 Streamed " (count new-content) " chars to " viewers-count " viewers of window " window-index)))))))
+              (recur current-content)))))
+      (catch Exception e
+        (println (str "❌ Error in window file monitoring: " (.getMessage e)))))))
+
 (defn start-window-streaming
   "Start streaming from a specific tmux window"
   [session-name window-index]
@@ -560,37 +632,6 @@
       (catch Exception e
         (println (str "❌ Error starting window streaming: " (.getMessage e)))
         {:success false :error (.getMessage e)}))))
-
-(defn start-window-file-monitoring
-  "Monitor tmux window output file and broadcast to subscribed users"
-  [session-name window-index output-file]
-  (future
-    (try
-      (println (str "📁 Starting file monitoring for window " session-name ":" window-index))
-      (let [file (File. output-file)]
-        (loop [last-size 0]
-          (Thread/sleep 100) ; Check every 100ms
-          (when (.exists file)
-            (let [current-size (.length file)]
-              (when (> current-size last-size)
-                ;; New content available
-                (let [new-content (with-open [reader (RandomAccessFile. output-file "r")]
-                                   (.seek reader last-size)
-                                   (let [buffer (byte-array (- current-size last-size))]
-                                     (.read reader buffer)
-                                     (String. buffer "UTF-8")))]
-                  ;; Broadcast to users viewing this specific window
-                  (when (not (str/blank? new-content))
-                    (let [viewers-count (broadcast-to-window-viewers session-name window-index 
-                                                                   {:type "window-stream"
-                                                                    :session session-name
-                                                                    :window window-index
-                                                                    :content new-content})]
-                      (when (> viewers-count 0)
-                        (println (str "📤 Streamed " (count new-content) " chars to " viewers-count " viewers of window " window-index)))))))
-              (recur current-size)))))
-      (catch Exception e
-        (println (str "❌ Error in window file monitoring: " (.getMessage e)))))))
 
 (defn manage-window-streaming
   "Start/stop window streaming based on active subscriptions"
@@ -811,49 +852,6 @@
     (catch Exception e
       (println (str "❌ Error sending WebSocket frame: " (.getMessage e))))))
 
-;; User window subscription tracking
-(def user-window-subscriptions (atom {}))
-;; Format: {"client-id" {:session "qq-default" :window 1}}
-
-(defn subscribe-user-to-window [client-socket session-name window-index]
-  "Subscribe a user to a specific window for streaming"
-  (let [client-id (str (.hashCode client-socket))]
-    (swap! user-window-subscriptions assoc client-id 
-           {:session session-name :window window-index :socket client-socket})
-    (println (str "📺 User " client-id " subscribed to " session-name ":" window-index))
-    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
-
-(defn unsubscribe-user [client-socket]
-  "Remove user's window subscription"
-  (let [client-id (str (.hashCode client-socket))]
-    (swap! user-window-subscriptions dissoc client-id)
-    (println (str "📺 User " client-id " unsubscribed"))
-    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
-
-(defn get-active-windows [session-name]
-  "Get list of windows that have active viewers"
-  (let [subscriptions (vals @user-window-subscriptions)
-        session-subs (filter #(= (:session %) session-name) subscriptions)
-        active-windows (distinct (map :window session-subs))]
-    (println (str "📋 Active windows for " session-name ": " active-windows))
-    active-windows))
-
-(defn broadcast-to-window-viewers [session-name window-index message]
-  "Send message only to users viewing specific window"
-  (let [viewers (filter (fn [[client-id subscription]]
-                         (and (= (:session subscription) session-name)
-                              (= (:window subscription) window-index)))
-                       @user-window-subscriptions)]
-    (doseq [[client-id subscription] viewers]
-      (try
-        (send-websocket-frame (:socket subscription) (json/write-str message))
-        (println (str "📤 Sent window update to user " client-id " for window " window-index))
-        (catch Exception e
-          (println (str "❌ Failed to send to user " client-id ": " (.getMessage e)))
-          ;; Remove dead connection
-          (unsubscribe-user (:socket subscription)))))
-    (count viewers)))
-
 ;; Q Window tracking - maps session-name to Q window index
 (def q-window-sessions (atom {})) ; session-name -> window-index
 
@@ -920,11 +918,21 @@
 (defn- handle-websocket-message [message-data client-socket]
   "Handle incoming WebSocket message with streaming support"
   (try
-    (let [parsed (json/read-str message-data :key-fn keyword)
-          command (:content parsed)
-          session-id (or (:session parsed) "qq-default")]
+    ;; Try to parse JSON message with error handling for browser cleanup
+    (let [parsed (try 
+                   (json/read-str message-data :key-fn keyword)
+                   (catch Exception e
+                     (println (str "⚠️ JSON parse error (likely browser cleanup): " (.getMessage e)))
+                     (println (str "📝 Raw message data: " (pr-str (take 50 message-data))))
+                     ;; Return nil to skip processing - this is likely browser cleanup
+                     nil))]
       
-      (println (str "📨 WebSocket Message: " parsed))
+      (if parsed
+        ;; Valid JSON message - process normally
+        (let [command (:content parsed)
+              session-id (or (:session parsed) "qq-default")]
+          
+          (println (str "📨 WebSocket Message: " parsed))
       
       (case (:type parsed)
         "command"
@@ -1071,10 +1079,16 @@
         
         ;; Default case
         {:type "error" :content "Unknown message type"}))
+        
+        ;; Invalid JSON - likely browser cleanup, don't send error response
+        (do
+          (println "⚠️ Skipping invalid message (likely browser cleanup)")
+          nil))) ; Return nil for invalid JSON
     
     (catch Exception e
       (println (str "❌ Message handling error: " (.getMessage e)))
-      {:type "error" :content (str "Message error: " (.getMessage e))})))
+      ;; Don't send error response for connection cleanup issues
+      nil)))
 
 (defn- handle-connection [client-socket]
   "Handle WebSocket connection with complete message processing"
@@ -1129,8 +1143,10 @@
                             
                             ;; Handle the message and get response
                             (let [response (handle-websocket-message message client-socket)]
-                              (println (str "📤 Sending response [" connection-id "]: " response))
-                              (send-websocket-frame output-stream (json/write-str response))))
+                              ;; Only send response if we got a valid one (not nil from browser cleanup)
+                              (when response
+                                (println (str "📤 Sending response [" connection-id "]: " response))
+                                (send-websocket-frame output-stream (json/write-str response)))))
                           
                           ;; Small delay to prevent busy waiting
                           (Thread/sleep 100))
