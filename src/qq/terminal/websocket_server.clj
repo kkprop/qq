@@ -245,6 +245,39 @@
       (catch Exception e
         (println (str "❌ Error in aggressive file monitoring: " (.getMessage e)))))))
 
+;; Simple HTTP endpoint for direct tmux commands
+(defn handle-tmux-command [request]
+  "Handle direct tmux command via HTTP"
+  (try
+    (let [body (slurp (:body request))
+          data (json/read-str body :key-fn keyword)
+          command (:command data)
+          session-name (or (:session data) "qq-default")]
+      
+      (when command
+        (println (str "📤 Direct tmux command: " command))
+        ;; Send command directly to tmux session
+        (let [result (p/process ["tmux" "send-keys" "-t" session-name command "Enter"] 
+                                {:out :string})]
+          (if (= 0 (:exit @result))
+            (println (str "✅ Command sent to tmux: " command))
+            (println (str "❌ Failed to send command: " (:err @result))))))
+      
+      ;; Return simple success response
+      {:status 200
+       :headers {"Content-Type" "application/json"
+                 "Access-Control-Allow-Origin" "*"
+                 "Access-Control-Allow-Methods" "POST"
+                 "Access-Control-Allow-Headers" "Content-Type"}
+       :body (json/write-str {:success true :message "Command sent to tmux"})})
+    
+    (catch Exception e
+      (println (str "❌ Error handling tmux command: " (.getMessage e)))
+      {:status 500
+       :headers {"Content-Type" "application/json"
+                 "Access-Control-Allow-Origin" "*"}
+       :body (json/write-str {:success false :error (.getMessage e)})})))
+
 (defn restart-pipe-pane-if-needed
   "Check and restart pipe-pane if it's inactive"
   [session-name output-file]

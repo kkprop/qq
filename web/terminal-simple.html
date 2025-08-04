@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ Terminal - Pure Tmux Mirroring</title>
+    
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        
+        .terminal-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000000;
+        }
+        
+        .terminal-header {
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .session-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #666;
+        }
+        
+        .session-status.connected { background-color: #4CAF50; }
+        .session-status.connecting { background-color: #FF9800; }
+        .session-status.disconnected { background-color: #F44336; }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control-btn {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .control-btn:hover {
+            background: #555;
+        }
+        
+        .terminal-wrapper {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 8px;
+            /* Enable scrollbar */
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
+        /* Custom scrollbar styling */
+        .terminal-wrapper::-webkit-scrollbar {
+            width: 12px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-track {
+            background: #2d2d2d;
+            border-radius: 6px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-thumb {
+            background: #666;
+            border-radius: 6px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+        
+        #terminal {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="session-info">
+                <div class="session-status" id="sessionStatus"></div>
+                <span id="sessionName">Pure Tmux Mirror</span>
+                <span id="sessionDetails">Ready to connect...</span>
+            </div>
+            <div class="terminal-controls">
+                <button class="control-btn" onclick="terminal.clear()">Clear</button>
+                <button class="control-btn" onclick="reconnectWebSocket()">Reconnect</button>
+                <button class="control-btn" onclick="window.open('/web/dashboard.html', '_blank')">Dashboard</button>
+            </div>
+        </div>
+        
+        <div class="terminal-wrapper">
+            <div id="terminal"></div>
+        </div>
+    </div>
+
+    <!-- xterm.js JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+
+    <script>
+        // Terminal setup
+        const terminal = new Terminal({
+            cursorBlink: true,
+            cursorStyle: 'block',
+            fontSize: 14,
+            fontFamily: 'Courier New, monospace',
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                selection: '#ffffff40'
+            },
+            cols: 120,
+            rows: 40
+        });
+
+        // Add-ons
+        const fitAddon = new FitAddon.FitAddon();
+        const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+        
+        terminal.loadAddon(fitAddon);
+        terminal.loadAddon(webLinksAddon);
+
+        // Mount terminal
+        terminal.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        // WebSocket connection
+        let ws = null;
+        let currentSessionId = 'qq-default';
+        let invisibleInputBuffer = '';
+        
+        // Continuous scrollable buffer state
+        let historyBuffer = [];
+        let loadedHistoryLines = 0;
+        let totalHistoryLines = 0;
+        let isLoadingHistory = false;
+
+        // Simple invisible input - let tmux handle all display
+        terminal.onData(function(data) {
+            try {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    return; // Don't show error - let tmux handle display
+                }
+                
+                if (data === '\u0003') {
+                    // Ctrl+C - send interrupt
+                    ws.send(JSON.stringify({
+                        type: 'interrupt',
+                        session: currentSessionId
+                    }));
+                    invisibleInputBuffer = '';
+                    return;
+                } else if (data === '\r') {
+                    // Enter key - send command
+                    if (invisibleInputBuffer.trim()) {
+                        ws.send(JSON.stringify({
+                            type: 'command',
+                            content: invisibleInputBuffer.trim(),
+                            session: currentSessionId
+                        }));
+                        console.log('Command sent:', invisibleInputBuffer.trim());
+                    }
+                    invisibleInputBuffer = '';
+                    return;
+                } else if (data === '\u007f' || data === '\b') {
+                    // Backspace
+                    if (invisibleInputBuffer.length > 0) {
+                        invisibleInputBuffer = invisibleInputBuffer.slice(0, -1);
+                    }
+                    return;
+                } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+                    // Regular character - add to invisible buffer, don't display
+                    invisibleInputBuffer += data;
+                    return;
+                }
+                
+                // Ignore all other input - let tmux handle everything
+                
+            } catch (error) {
+                console.error('Error in input handler:', error);
+            }
+        });
+
+        // WebSocket connection management
+        function connectWebSocket() {
+            updateConnectionStatus('connecting', 'Connecting...');
+            
+            try {
+                console.log(`🔌 Attempting WebSocket connection to: ws://localhost:9091/terminal/${currentSessionId}`);
+                ws = new WebSocket(`ws://localhost:9091/terminal/${currentSessionId}`);
+                
+                ws.onopen = function() {
+                    console.log('✅ WebSocket connected');
+                    updateConnectionStatus('connected', `Connected to ${currentSessionId}`);
+                    
+                    // Send welcome message
+                    terminal.writeln('🤖 Pure Tmux Mirror Connected!');
+                    terminal.writeln('=====================================');
+                    terminal.writeln(`📡 Session: ${currentSessionId}`);
+                    terminal.writeln('🎯 Pure tmux mirroring - no browser display interference');
+                    terminal.writeln('💡 Type commands - they will appear via tmux mirroring');
+                    terminal.writeln('');
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('📨 WebSocket message:', data.type);
+                        
+                        switch(data.type) {
+                            case 'tmux-current-page':
+                                // Initialize continuous buffer
+                                console.log('📄 Current page received:', data.currentPageLines, 'lines');
+                                if (data.content) {
+                                    const currentLines = data.content.split('\n');
+                                    historyBuffer = currentLines;
+                                    loadedHistoryLines = data.currentPageLines;
+                                    totalHistoryLines = data.totalLines;
+                                    
+                                    terminal.clear();
+                                    terminal.write('📄 Loading tmux history...\r\n\r\n');
+                                    buildContinuousBuffer();
+                                    
+                                    // Setup scroll detection
+                                    setTimeout(setupScrollDetection, 1000);
+                                    
+                                    // Scroll to bottom
+                                    setTimeout(() => {
+                                        const xtermViewport = document.querySelector('.xterm-viewport');
+                                        if (xtermViewport) {
+                                            xtermViewport.scrollTop = xtermViewport.scrollHeight;
+                                        }
+                                    }, 500);
+                                }
+                                break;
+                                
+                            case 'tmux-realtime':
+                                // Handle real-time tmux updates
+                                if (data.content) {
+                                    // Add new content to buffer
+                                    const newLines = data.content.split('\n').filter(line => line.trim() !== '');
+                                    if (newLines.length > 0) {
+                                        historyBuffer = historyBuffer.concat(newLines);
+                                    }
+                                    
+                                    // Handle spinner patterns
+                                    if (data.content.includes('Thinking...')) {
+                                        terminal.write('\r\x1b[2K' + data.content.replace(/\r/g, ''));
+                                    } else if (data.content.includes('\r')) {
+                                        terminal.write(data.content);
+                                    } else {
+                                        terminal.write(data.content + '\r\n');
+                                        
+                                        // Auto-scroll to bottom for new content
+                                        setTimeout(() => {
+                                            const xtermViewport = document.querySelector('.xterm-viewport');
+                                            if (xtermViewport) {
+                                                const isNearBottom = xtermViewport.scrollTop + xtermViewport.clientHeight >= xtermViewport.scrollHeight - 100;
+                                                if (isNearBottom) {
+                                                    xtermViewport.scrollTop = xtermViewport.scrollHeight;
+                                                }
+                                            }
+                                        }, 50);
+                                    }
+                                }
+                                break;
+                                
+                            case 'tmux-incremental-history':
+                                // Handle incremental history
+                                if (data.content) {
+                                    const newHistoryLines = data.content.split('\n').filter(line => line.trim() !== '');
+                                    prependHistoryToBuffer(newHistoryLines);
+                                }
+                                isLoadingHistory = false;
+                                break;
+                                
+                            default:
+                                console.log('Ignoring message type:', data.type);
+                        }
+                    } catch (error) {
+                        console.error('Error processing WebSocket message:', error);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    console.log('🔌 WebSocket connection closed');
+                    updateConnectionStatus('disconnected', 'Connection lost');
+                    
+                    terminal.writeln('\r\n🔌 Connection lost. Attempting to reconnect...');
+                    
+                    // Auto-reconnect after 3 seconds
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('❌ WebSocket error:', error);
+                    updateConnectionStatus('disconnected', 'Connection error');
+                };
+                
+            } catch (error) {
+                console.error('❌ Error creating WebSocket:', error);
+                updateConnectionStatus('disconnected', 'Connection failed');
+                setTimeout(connectWebSocket, 5000);
+            }
+        }
+
+        // Continuous buffer functions
+        function buildContinuousBuffer() {
+            terminal.clear();
+            for (let i = 0; i < historyBuffer.length; i++) {
+                terminal.write(historyBuffer[i] + '\r\n');
+            }
+            console.log('📜 Rebuilt continuous buffer with', historyBuffer.length, 'lines');
+        }
+        
+        function prependHistoryToBuffer(newHistoryLines) {
+            historyBuffer = newHistoryLines.concat(historyBuffer);
+            loadedHistoryLines += newHistoryLines.length;
+            
+            console.log('📜 Added', newHistoryLines.length, 'history lines. Total:', historyBuffer.length);
+            buildContinuousBuffer();
+            
+            setTimeout(() => {
+                const xtermViewport = document.querySelector('.xterm-viewport');
+                if (xtermViewport) {
+                    xtermViewport.scrollTop = newHistoryLines.length * 20;
+                }
+            }, 100);
+        }
+        
+        function setupScrollDetection() {
+            console.log('🔧 Setting up scroll detection...');
+            const xtermViewport = document.querySelector('.xterm-viewport');
+            
+            if (xtermViewport) {
+                console.log('✅ Found xterm viewport for scrolling');
+                
+                xtermViewport.addEventListener('scroll', function(e) {
+                    const scrollTop = xtermViewport.scrollTop;
+                    const scrollHeight = xtermViewport.scrollHeight;
+                    
+                    console.log('📜 Scroll position:', scrollTop, '/', scrollHeight);
+                    
+                    if (scrollTop < 200 && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
+                        console.log('🔄 Loading more history...');
+                        loadMoreHistory();
+                    }
+                });
+                
+                console.log('✅ Scroll detection setup complete');
+            } else {
+                setTimeout(setupScrollDetection, 2000);
+            }
+        }
+        
+        function loadMoreHistory() {
+            if (ws && ws.readyState === WebSocket.OPEN && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
+                isLoadingHistory = true;
+                
+                const offset = loadedHistoryLines + 50;
+                const limit = 50;
+                
+                ws.send(JSON.stringify({
+                    type: 'load-incremental-history',
+                    offset: offset,
+                    limit: limit
+                }));
+            }
+        }
+
+        // UI helper functions
+        function updateConnectionStatus(status, message) {
+            const statusElement = document.getElementById('sessionStatus');
+            const detailsElement = document.getElementById('sessionDetails');
+            
+            statusElement.className = `session-status ${status}`;
+            detailsElement.textContent = message;
+        }
+
+        function reconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+            connectWebSocket();
+        }
+
+        // Initialize
+        console.log('🤖 Pure Tmux Mirror Terminal initialized');
+        console.log(`📡 WebSocket will connect to ws://localhost:9091/terminal/${currentSessionId}`);
+        console.log('🎯 Ready for pure tmux mirroring!');
+        
+        // Auto-connect
+        connectWebSocket();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            fitAddon.fit();
+        });
+    </script>
+</body>
+</html>
