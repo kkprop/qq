@@ -488,9 +488,9 @@
                                     }
                                     
                                     // Check for spinner patterns that should overwrite
-                                    if (data.content.includes('Thinking...') && data.content.includes('\r')) {
-                                        // Handle spinner - move cursor to beginning of line and overwrite
-                                        terminal.write('\r' + data.content.replace(/\r/g, ''));
+                                    if (data.content.includes('Thinking...')) {
+                                        // Handle spinner - always overwrite, regardless of \r presence
+                                        terminal.write('\r\x1b[2K' + data.content.replace(/\r/g, ''));
                                     } else if (data.content.includes('\r')) {
                                         // Other carriage return content - handle as overwrite
                                         terminal.write(data.content);
