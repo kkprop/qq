@@ -529,6 +529,77 @@
       (catch Exception e
         (println (str "❌ Error in file monitoring: " (.getMessage e)))))))
 
+(defn start-window-streaming
+  "Start streaming from a specific tmux window"
+  [session-name window-index]
+  (let [window-target (str session-name ":" window-index)
+        output-file (str "/tmp/tmux-window-" session-name "-" window-index ".log")]
+    
+    (println (str "🌊 Starting window streaming for: " window-target))
+    
+    ;; Clean up existing file
+    (when (.exists (File. output-file))
+      (.delete (File. output-file)))
+    
+    ;; Create empty file
+    (spit output-file "")
+    
+    ;; Start tmux pipe-pane for specific window
+    (try
+      (let [result (p/process ["tmux" "pipe-pane" "-t" window-target "-O" output-file]
+                             {:out :string :err :string})]
+        (if (= 0 (:exit @result))
+          (do
+            (println (str "✅ Window streaming started for " window-target))
+            ;; Start file monitoring for this window
+            (start-window-file-monitoring session-name window-index output-file)
+            {:success true :window window-target :file output-file})
+          (do
+            (println (str "❌ Failed to start window streaming: " (:err @result)))
+            {:success false :error (:err @result)})))
+      (catch Exception e
+        (println (str "❌ Error starting window streaming: " (.getMessage e)))
+        {:success false :error (.getMessage e)}))))
+
+(defn start-window-file-monitoring
+  "Monitor tmux window output file and broadcast to subscribed users"
+  [session-name window-index output-file]
+  (future
+    (try
+      (println (str "📁 Starting file monitoring for window " session-name ":" window-index))
+      (let [file (File. output-file)]
+        (loop [last-size 0]
+          (Thread/sleep 100) ; Check every 100ms
+          (when (.exists file)
+            (let [current-size (.length file)]
+              (when (> current-size last-size)
+                ;; New content available
+                (let [new-content (with-open [reader (RandomAccessFile. output-file "r")]
+                                   (.seek reader last-size)
+                                   (let [buffer (byte-array (- current-size last-size))]
+                                     (.read reader buffer)
+                                     (String. buffer "UTF-8")))]
+                  ;; Broadcast to users viewing this specific window
+                  (when (not (str/blank? new-content))
+                    (let [viewers-count (broadcast-to-window-viewers session-name window-index 
+                                                                   {:type "window-stream"
+                                                                    :session session-name
+                                                                    :window window-index
+                                                                    :content new-content})]
+                      (when (> viewers-count 0)
+                        (println (str "📤 Streamed " (count new-content) " chars to " viewers-count " viewers of window " window-index)))))))
+              (recur current-size)))))
+      (catch Exception e
+        (println (str "❌ Error in window file monitoring: " (.getMessage e)))))))
+
+(defn manage-window-streaming
+  "Start/stop window streaming based on active subscriptions"
+  [session-name]
+  (let [active-windows (get-active-windows session-name)]
+    (println (str "🔄 Managing streaming for windows: " active-windows " in session " session-name))
+    (doseq [window active-windows]
+      (start-window-streaming session-name window))))
+
 (defn start-tmux-streaming
   "Start streaming from a tmux session to WebSocket clients"
   [session-name client-socket]
@@ -740,6 +811,49 @@
     (catch Exception e
       (println (str "❌ Error sending WebSocket frame: " (.getMessage e))))))
 
+;; User window subscription tracking
+(def user-window-subscriptions (atom {}))
+;; Format: {"client-id" {:session "qq-default" :window 1}}
+
+(defn subscribe-user-to-window [client-socket session-name window-index]
+  "Subscribe a user to a specific window for streaming"
+  (let [client-id (str (.hashCode client-socket))]
+    (swap! user-window-subscriptions assoc client-id 
+           {:session session-name :window window-index :socket client-socket})
+    (println (str "📺 User " client-id " subscribed to " session-name ":" window-index))
+    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
+
+(defn unsubscribe-user [client-socket]
+  "Remove user's window subscription"
+  (let [client-id (str (.hashCode client-socket))]
+    (swap! user-window-subscriptions dissoc client-id)
+    (println (str "📺 User " client-id " unsubscribed"))
+    (println (str "📊 Active subscriptions: " (count @user-window-subscriptions)))))
+
+(defn get-active-windows [session-name]
+  "Get list of windows that have active viewers"
+  (let [subscriptions (vals @user-window-subscriptions)
+        session-subs (filter #(= (:session %) session-name) subscriptions)
+        active-windows (distinct (map :window session-subs))]
+    (println (str "📋 Active windows for " session-name ": " active-windows))
+    active-windows))
+
+(defn broadcast-to-window-viewers [session-name window-index message]
+  "Send message only to users viewing specific window"
+  (let [viewers (filter (fn [[client-id subscription]]
+                         (and (= (:session subscription) session-name)
+                              (= (:window subscription) window-index)))
+                       @user-window-subscriptions)]
+    (doseq [[client-id subscription] viewers]
+      (try
+        (send-websocket-frame (:socket subscription) (json/write-str message))
+        (println (str "📤 Sent window update to user " client-id " for window " window-index))
+        (catch Exception e
+          (println (str "❌ Failed to send to user " client-id ": " (.getMessage e)))
+          ;; Remove dead connection
+          (unsubscribe-user (:socket subscription)))))
+    (count viewers)))
+
 ;; Q Window tracking - maps session-name to Q window index
 (def q-window-sessions (atom {})) ; session-name -> window-index
 
@@ -935,6 +1049,25 @@
               (println (str "✅ Created new window in session " session-name))
               {:type "window-created" :session session-name :success true})
             {:type "error" :content "Failed to create window" :success false}))
+        
+        ;; 📺 NEW: Window subscription management
+        "subscribe-window"
+        (let [session-name (if (= (:session parsed) "default") 
+                            "qq-default"
+                            (or (:session parsed) "qq-default"))
+              window-index (:window parsed)]
+          (subscribe-user-to-window client-socket session-name window-index)
+          ;; Start streaming for this window if not already active
+          (manage-window-streaming session-name)
+          {:type "window-subscribed" 
+           :session session-name 
+           :window window-index 
+           :success true})
+        
+        "unsubscribe-window"
+        (do
+          (unsubscribe-user client-socket)
+          {:type "window-unsubscribed" :success true})
         
         ;; Default case
         {:type "error" :content "Unknown message type"}))

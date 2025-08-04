@@ -310,6 +310,13 @@
         function switchToWindow(windowIndex) {
             console.log('🔄 Switching to window:', windowIndex);
             if (ws && ws.readyState === WebSocket.OPEN) {
+                // 📺 NEW: Subscribe to specific window for streaming
+                ws.send(JSON.stringify({
+                    type: 'subscribe-window',
+                    session: currentSessionName,
+                    window: windowIndex
+                }));
+                
                 // Switch tmux to the selected window and get its content
                 ws.send(JSON.stringify({
                     type: 'select-window',
@@ -324,7 +331,7 @@
                 delete windowActivity[windowIndex];
                 updateWindowTabs(availableWindows);
                 
-                console.log('🎯 Window switch requested - content will be synchronized automatically');
+                console.log('🎯 Window switch requested with subscription - content will be synchronized automatically');
             }
         }
         
@@ -544,6 +551,18 @@
                     // 🪟 NEW: Refresh windows list when connected
                     setTimeout(() => {
                         refreshWindows();
+                        
+                        // 📺 NEW: Subscribe to initial window (usually window 1 or 2)
+                        setTimeout(() => {
+                            if (currentWindowIndex) {
+                                ws.send(JSON.stringify({
+                                    type: 'subscribe-window',
+                                    session: currentSessionName,
+                                    window: currentWindowIndex
+                                }));
+                                console.log('📺 Subscribed to initial window:', currentWindowIndex);
+                            }
+                        }, 1000);
                     }, 1000);
                 };
                 
@@ -749,6 +768,29 @@
                                 setTimeout(() => refreshWindows(), 1000);
                                 break;
                                 
+                            // 📺 NEW: Window subscription response handlers
+                            case 'window-subscribed':
+                                console.log('📺 Subscribed to window:', data.window, 'in session:', data.session);
+                                break;
+                                
+                            case 'window-unsubscribed':
+                                console.log('📺 Unsubscribed from window');
+                                break;
+                                
+                            // 📺 NEW: Window-specific streaming updates
+                            case 'window-stream':
+                                // Only render if this is the window user is currently viewing
+                                if (data.window === currentWindowIndex) {
+                                    console.log('📺 Window stream update for current window:', data.window);
+                                    if (data.content) {
+                                        terminal.write(data.content);
+                                    }
+                                } else {
+                                    console.log('📝 Window stream update for non-current window:', data.window, '- marking activity');
+                                    markWindowActivity(data.window);
+                                }
+                                break;
+                                
                             // 🎯 NEW: Smart routing response handlers with activity tracking
                             case 'shell-command-sent':
                                 console.log('🐚 Shell command sent to window:', data.targetWindow);
@@ -798,6 +840,10 @@
                 ws.onclose = function(event) {
                     console.log(`🔌 WebSocket connection closed - Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
                     updateConnectionStatus('disconnected', 'Disconnected');
+                    
+                    // 📺 NEW: Clean up window subscription on disconnect
+                    currentWindowIndex = null;
+                    windowActivity = {};
                 };
                 
             } catch (error) {
