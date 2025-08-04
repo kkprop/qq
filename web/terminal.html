@@ -695,6 +695,28 @@
                                 setTimeout(() => refreshWindows(), 1000);
                                 break;
                                 
+                            // 🎯 NEW: Smart routing response handlers
+                            case 'shell-command-sent':
+                                console.log('🐚 Shell command sent to window:', data.targetWindow);
+                                // Command sent to shell, response will come via tmux mirroring
+                                break;
+                                
+                            case 'output':
+                                // Q command response - display immediately
+                                if (data.commandType === 'q-command') {
+                                    console.log('🎯 Q command response received for window:', data.targetWindow);
+                                    if (data.content) {
+                                        // Display Q response in terminal
+                                        terminal.write('\r\n');
+                                        terminal.write(data.content);
+                                        terminal.write('\r\n$ ');
+                                    }
+                                } else {
+                                    // Regular output handling
+                                    console.log('WebSocket output received but ignored - using tmux mirroring');
+                                }
+                                break;
+                                
                             default:
                                 console.log('Unknown message type:', data.type, data);
                                 break;
@@ -885,8 +907,14 @@
                             ws.send(JSON.stringify({
                                 type: 'command',
                                 content: inputBuffer.trim(),
-                                session: currentSessionId
+                                session: currentSessionId,
+                                currentWindow: currentWindowIndex || 2 // Include current window for smart routing
                             }));
+                            
+                            console.log('📤 Command sent with smart routing info:', {
+                                command: inputBuffer.trim(),
+                                currentWindow: currentWindowIndex || 2
+                            });
                             
                             // Don't show processing indicator - let tmux mirroring handle display
                             // terminal.write('⏳ Processing...\\r\\n'); // REMOVED for real tmux experience

@@ -738,6 +738,56 @@
     (catch Exception e
       (println (str "❌ Error sending WebSocket frame: " (.getMessage e))))))
 
+;; Q Window tracking - maps session-name to Q window index
+(def q-window-sessions (atom {})) ; session-name -> window-index
+
+(defn q-command? [command]
+  "Detect if command is a Q command vs regular shell command"
+  (let [cmd (str/trim (str/lower-case command))]
+    (or
+      ;; Question patterns
+      (.contains cmd "?")
+      ;; Q command starters
+      (re-matches #"^(what|how|why|explain|tell me|describe|show me|help|can you).*" cmd)
+      ;; Direct Q invocation
+      (.startsWith cmd "q ")
+      ;; Other Q patterns
+      (re-matches #".*(explain|meaning|definition|difference|compare).*" cmd))))
+
+(defn get-or-create-q-window [session-name]
+  "Get existing Q window or create new one for Q commands"
+  (if-let [existing-window (get @q-window-sessions session-name)]
+    (do
+      (println (str "📋 Using existing Q window " existing-window " for session " session-name))
+      existing-window)
+    (do
+      (println (str "🆕 Creating new Q window for session " session-name))
+      ;; Create new window for Q
+      (if (create-tmux-window session-name)
+        (let [windows (list-tmux-windows session-name)
+              new-window-index (apply max (map :index windows))]
+          (println (str "✅ Created Q window " new-window-index " for session " session-name))
+          ;; Track this as the Q window
+          (swap! q-window-sessions assoc session-name new-window-index)
+          ;; Switch to the Q window and start Q if needed
+          (select-tmux-window session-name new-window-index)
+          new-window-index)
+        (do
+          (println (str "❌ Failed to create Q window for session " session-name))
+          ;; Fallback to window 0 or current active window
+          0)))))
+
+(defn route-command [command session-name current-window]
+  "Smart routing: Q commands to Q window, shell commands to current window"
+  (if (q-command? command)
+    (do
+      (println (str "🎯 Q command detected: '" command "' → routing to Q window"))
+      (let [q-window (get-or-create-q-window session-name)]
+        {:window q-window :type :q-command}))
+    (do
+      (println (str "🐚 Shell command detected: '" command "' → routing to current window " current-window))
+      {:window current-window :type :shell-command})))
+
 (defn- process-qa-command [command session-id]
   "Process Q&A command using our proven implementation"
   (try
@@ -764,13 +814,44 @@
       (case (:type parsed)
         "command"
         (do
-          ;; Record command for echo filtering
-          (record-sent-command session-id command)
-          
-          (let [result (process-qa-command command session-id)]
-            (if (:success result)
-              {:type "output" :content (:output result) :success true}
-              {:type "error" :content (:error result) :success false})))
+          ;; Get current window from client (which window user is viewing)
+          (let [session-name (or (:session parsed) "qq-default")
+                current-window (or (:currentWindow parsed) 2) ; Default to window 2
+                routing (route-command command session-name current-window)]
+            
+            (println (str "📍 Smart routing: " (:type routing) " → window " (:window routing)))
+            
+            ;; Record command for echo filtering
+            (record-sent-command session-id command)
+            
+            (if (= (:type routing) :q-command)
+              ;; Q command - use Q&A processing
+              (let [q-session-id (str session-name ":" (:window routing))
+                    result (process-qa-command command q-session-id)]
+                (if (:success result)
+                  {:type "output" 
+                   :content (:output result) 
+                   :targetWindow (:window routing)
+                   :commandType "q-command"
+                   :success true}
+                  {:type "error" 
+                   :content (:error result) 
+                   :targetWindow (:window routing)
+                   :success false}))
+              ;; Shell command - send to current window
+              (let [shell-session-id (str session-name ":" (:window routing))
+                    result (p/process ["tmux" "send-keys" "-t" shell-session-id command "Enter"]
+                                     {:out :string})]
+                (if (= 0 (:exit @result))
+                  {:type "shell-command-sent"
+                   :content (str "Command sent to window " (:window routing))
+                   :targetWindow (:window routing)
+                   :commandType "shell-command"
+                   :success true}
+                  {:type "error"
+                   :content "Failed to send shell command"
+                   :targetWindow (:window routing)
+                   :success false})))))
         
         "ping"
         {:type "pong" :content "Server alive"}
