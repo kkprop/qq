@@ -260,10 +260,10 @@
             
             // Scroll to maintain user's position (scroll down to where they were)
             setTimeout(() => {
-                const terminalWrapper = document.querySelector('.terminal-wrapper');
-                if (terminalWrapper) {
+                const xtermViewport = document.querySelector('.xterm-viewport');
+                if (xtermViewport) {
                     // Scroll down to maintain relative position
-                    terminalWrapper.scrollTop = newHistoryLines.length * 20; // Approximate line height
+                    xtermViewport.scrollTop = newHistoryLines.length * 20; // Approximate line height
                 }
             }, 100);
         }
@@ -272,17 +272,23 @@
         function setupScrollDetection() {
             console.log('🔧 Setting up continuous scroll detection...');
             
-            const terminalWrapper = document.querySelector('.terminal-wrapper');
+            // Target the xterm viewport - this is the actual scrollable element!
+            const xtermViewport = document.querySelector('.xterm-viewport');
             
-            if (terminalWrapper) {
-                console.log('✅ Found terminal wrapper for continuous scrolling');
+            if (xtermViewport) {
+                console.log('✅ Found xterm viewport for continuous scrolling');
+                console.log('🔧 Viewport scroll info:', {
+                    scrollHeight: xtermViewport.scrollHeight,
+                    clientHeight: xtermViewport.clientHeight,
+                    scrollTop: xtermViewport.scrollTop
+                });
                 
-                terminalWrapper.addEventListener('scroll', function(e) {
-                    const scrollTop = terminalWrapper.scrollTop;
-                    const scrollHeight = terminalWrapper.scrollHeight;
-                    const clientHeight = terminalWrapper.clientHeight;
+                xtermViewport.addEventListener('scroll', function(e) {
+                    const scrollTop = xtermViewport.scrollTop;
+                    const scrollHeight = xtermViewport.scrollHeight;
+                    const clientHeight = xtermViewport.clientHeight;
                     
-                    console.log('📜 Scroll position:', scrollTop, '/', scrollHeight);
+                    console.log('📜 Xterm scroll position:', scrollTop, '/', scrollHeight);
                     
                     // If user scrolled near the top and we have more history
                     if (scrollTop < 200 && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
@@ -291,9 +297,9 @@
                     }
                 });
                 
-                console.log('✅ Continuous scroll detection setup complete');
+                console.log('✅ Continuous scroll detection setup complete on xterm viewport');
             } else {
-                console.log('❌ Terminal wrapper not found, retrying...');
+                console.log('❌ Xterm viewport not found, retrying...');
                 setTimeout(setupScrollDetection, 2000);
             }
         }
@@ -414,6 +420,11 @@
                                 loadedHistoryLines = data.currentPageLines;
                                 totalHistoryLines = data.totalLines;
                                 
+                                console.log('🔧 DEBUG: About to initialize continuous buffer');
+                                console.log('🔧 DEBUG: historyBuffer length:', historyBuffer.length);
+                                console.log('🔧 DEBUG: loadedHistoryLines:', loadedHistoryLines);
+                                console.log('🔧 DEBUG: totalHistoryLines:', totalHistoryLines);
+                                
                                 // Build initial continuous buffer
                                 terminal.clear();
                                 terminal.write('📄 Loading continuous tmux history...\r\n\r\n');
@@ -422,14 +433,21 @@
                                 tmuxHistoryLoaded = true;
                                 updateMirroringStatus('🚀 Continuous buffer loaded (' + loadedHistoryLines + '/' + totalHistoryLines + ' lines)');
                                 
+                                console.log('🔧 DEBUG: About to setup scroll detection in 1 second...');
                                 // Setup scroll detection for continuous loading
-                                setTimeout(setupScrollDetection, 1000);
+                                setTimeout(() => {
+                                    console.log('🔧 DEBUG: Calling setupScrollDetection now...');
+                                    setupScrollDetection();
+                                }, 1000);
                                 
                                 // Scroll to bottom to show most recent content
                                 setTimeout(() => {
-                                    const terminalWrapper = document.querySelector('.terminal-wrapper');
-                                    if (terminalWrapper) {
-                                        terminalWrapper.scrollTop = terminalWrapper.scrollHeight;
+                                    const xtermViewport = document.querySelector('.xterm-viewport');
+                                    if (xtermViewport) {
+                                        console.log('🔧 DEBUG: Scrolling xterm viewport to bottom');
+                                        xtermViewport.scrollTop = xtermViewport.scrollHeight;
+                                    } else {
+                                        console.log('❌ DEBUG: Xterm viewport not found for scroll to bottom');
                                     }
                                 }, 500);
                                 
@@ -482,11 +500,11 @@
                                         
                                         // Auto-scroll to bottom for new content
                                         setTimeout(() => {
-                                            const terminalWrapper = document.querySelector('.terminal-wrapper');
-                                            if (terminalWrapper) {
-                                                const isNearBottom = terminalWrapper.scrollTop + terminalWrapper.clientHeight >= terminalWrapper.scrollHeight - 100;
+                                            const xtermViewport = document.querySelector('.xterm-viewport');
+                                            if (xtermViewport) {
+                                                const isNearBottom = xtermViewport.scrollTop + xtermViewport.clientHeight >= xtermViewport.scrollHeight - 100;
                                                 if (isNearBottom) {
-                                                    terminalWrapper.scrollTop = terminalWrapper.scrollHeight;
+                                                    xtermViewport.scrollTop = xtermViewport.scrollHeight;
                                                 }
                                             }
                                         }, 50);
