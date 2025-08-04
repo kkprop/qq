@@ -174,10 +174,11 @@
         let totalHistoryLines = 0;
         let isLoadingHistory = false;
 
-        // Complete input suppression - zero browser display, pure tmux mirroring
+        // Simple real-time duplicate filtering - compare with last sent command
         let invisibleInputBuffer = '';
         let commandHistory = [];
         let historyIndex = 0;
+        let lastSentCommand = '';
         
         terminal.onData(function(data) {
             try {
@@ -196,6 +197,9 @@
                 } else if (data === '\r') {
                     // Enter key - send command completely invisibly
                     if (invisibleInputBuffer.trim()) {
+                        // Store the command for duplicate filtering
+                        lastSentCommand = invisibleInputBuffer.trim();
+                        
                         // Add to history for potential future use
                         commandHistory.push(invisibleInputBuffer.trim());
                         historyIndex = commandHistory.length;
@@ -208,6 +212,7 @@
                         }));
                         
                         console.log('🤫 Command sent invisibly:', invisibleInputBuffer.trim());
+                        console.log('🔍 Will filter duplicates of:', lastSentCommand);
                     }
                     invisibleInputBuffer = '';
                     return;
@@ -229,6 +234,27 @@
                 console.error('Error in input handler:', error);
             }
         });
+
+        // Simple duplicate detection - compare content with last sent command
+        function isDuplicateOfLastCommand(content) {
+            if (!lastSentCommand || !content) return false;
+            
+            const cleanContent = content.trim();
+            
+            // Check if content matches our last sent command exactly
+            if (cleanContent === lastSentCommand) {
+                console.log('🔍 Exact duplicate detected:', cleanContent);
+                return true;
+            }
+            
+            // Check if content is just the command without prompt
+            if (cleanContent === lastSentCommand.replace(/^\$\s*/, '').replace(/^>\s*/, '')) {
+                console.log('🔍 Command duplicate detected:', cleanContent);
+                return true;
+            }
+            
+            return false;
+        }
 
         // WebSocket connection management
         function connectWebSocket() {
@@ -284,8 +310,14 @@
                                 break;
                                 
                             case 'tmux-realtime':
-                                // Pure tmux mirroring - display everything from tmux exactly as-is
+                                // Simple duplicate filtering - compare with last sent command
                                 if (data.content) {
+                                    // Skip if this content is a duplicate of our last sent command
+                                    if (isDuplicateOfLastCommand(data.content)) {
+                                        console.log('🚫 Filtered duplicate:', data.content.trim());
+                                        return; // Skip displaying this content
+                                    }
+                                    
                                     // Add new content to buffer
                                     const newLines = data.content.split('\n').filter(line => line.trim() !== '');
                                     if (newLines.length > 0) {
