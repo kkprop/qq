@@ -272,15 +272,142 @@
             },
             allowTransparency: false,
             convertEol: true,
-            scrollback: 1000
+            scrollback: 1000,
+            // 🖱️ ENABLE MOUSE SELECTION AND CLIPBOARD SUPPORT
+            disableStdin: false,
+            rightClickSelectsWord: false, // Allow right-click context menu
+            scrollOnUserInput: true,
+            allowProposedApi: true // Enable advanced features
         });
 
-        // Add-ons
+        // Add-ons including clipboard support
         const fitAddon = new FitAddon.FitAddon();
         const webLinksAddon = new WebLinksAddon.WebLinksAddon();
         
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(webLinksAddon);
+
+        // 📋 ADD CLIPBOARD FUNCTIONALITY
+        // Enable text selection with mouse drag
+        terminal.onSelectionChange(() => {
+            const selection = terminal.getSelection();
+            if (selection) {
+                console.log('📋 Text selected:', selection.length, 'characters');
+            }
+        });
+
+        // Add keyboard shortcuts for copy/paste
+        terminal.attachCustomKeyEventHandler((event) => {
+            // Ctrl+C for copy (when text is selected)
+            if (event.ctrlKey && event.key === 'c' && terminal.hasSelection()) {
+                const selection = terminal.getSelection();
+                if (selection) {
+                    navigator.clipboard.writeText(selection).then(() => {
+                        console.log('📋 Copied to clipboard:', selection.length, 'characters');
+                    }).catch(err => {
+                        console.error('❌ Failed to copy to clipboard:', err);
+                    });
+                }
+                return false; // Prevent default
+            }
+            
+            // Ctrl+V for paste
+            if (event.ctrlKey && event.key === 'v') {
+                navigator.clipboard.readText().then(text => {
+                    if (text) {
+                        console.log('📋 Pasting from clipboard:', text.length, 'characters');
+                        // Add each character to input buffer
+                        for (let char of text) {
+                            inputBuffer += char;
+                        }
+                        // Display the pasted text
+                        terminal.write(text);
+                    }
+                }).catch(err => {
+                    console.error('❌ Failed to paste from clipboard:', err);
+                });
+                return false; // Prevent default
+            }
+            
+            return true; // Allow other key events
+        });
+
+        // Add right-click context menu for copy/paste
+        terminal.element.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            
+            const hasSelection = terminal.hasSelection();
+            const selection = hasSelection ? terminal.getSelection() : '';
+            
+            // Create context menu
+            const contextMenu = document.createElement('div');
+            contextMenu.style.cssText = `
+                position: fixed;
+                top: ${event.clientY}px;
+                left: ${event.clientX}px;
+                background: #2d2d2d;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 4px 0;
+                z-index: 1000;
+                font-size: 12px;
+                color: #fff;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            `;
+            
+            // Copy option (only if text is selected)
+            if (hasSelection) {
+                const copyOption = document.createElement('div');
+                copyOption.textContent = '📋 Copy';
+                copyOption.style.cssText = `
+                    padding: 6px 12px;
+                    cursor: pointer;
+                    hover: background: #404040;
+                `;
+                copyOption.onmouseover = () => copyOption.style.background = '#404040';
+                copyOption.onmouseout = () => copyOption.style.background = 'transparent';
+                copyOption.onclick = () => {
+                    navigator.clipboard.writeText(selection);
+                    console.log('📋 Copied via context menu:', selection.length, 'characters');
+                    document.body.removeChild(contextMenu);
+                };
+                contextMenu.appendChild(copyOption);
+            }
+            
+            // Paste option
+            const pasteOption = document.createElement('div');
+            pasteOption.textContent = '📋 Paste';
+            pasteOption.style.cssText = `
+                padding: 6px 12px;
+                cursor: pointer;
+            `;
+            pasteOption.onmouseover = () => pasteOption.style.background = '#404040';
+            pasteOption.onmouseout = () => pasteOption.style.background = 'transparent';
+            pasteOption.onclick = () => {
+                navigator.clipboard.readText().then(text => {
+                    if (text) {
+                        console.log('📋 Pasting via context menu:', text.length, 'characters');
+                        for (let char of text) {
+                            inputBuffer += char;
+                        }
+                        terminal.write(text);
+                    }
+                });
+                document.body.removeChild(contextMenu);
+            };
+            contextMenu.appendChild(pasteOption);
+            
+            document.body.appendChild(contextMenu);
+            
+            // Remove context menu when clicking elsewhere
+            const removeMenu = (e) => {
+                if (!contextMenu.contains(e.target)) {
+                    document.body.removeChild(contextMenu);
+                    document.removeEventListener('click', removeMenu);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', removeMenu), 100);
+        });
 
         // Mount terminal
         terminal.open(document.getElementById('terminal'));
