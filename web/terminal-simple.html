@@ -136,32 +136,85 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
 
     <script>
-        // Terminal setup
-        const terminal = new Terminal({
-            cursorBlink: true,
-            cursorStyle: 'block',
-            fontSize: 14,
-            fontFamily: 'Courier New, monospace',
-            theme: {
-                background: '#000000',
-                foreground: '#ffffff',
-                cursor: '#ffffff',
-                selection: '#ffffff40'
-            },
-            cols: 120,
-            rows: 40
-        });
-
-        // Add-ons
-        const fitAddon = new FitAddon.FitAddon();
-        const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+        // Debug xterm.js loading
+        console.log('🔍 Checking xterm.js availability...');
+        console.log('Terminal class:', typeof Terminal);
+        console.log('FitAddon class:', typeof FitAddon);
+        console.log('WebLinksAddon class:', typeof WebLinksAddon);
         
-        terminal.loadAddon(fitAddon);
-        terminal.loadAddon(webLinksAddon);
+        // Terminal setup with error handling
+        let terminal, fitAddon, webLinksAddon;
+        
+        try {
+            console.log('🔧 Creating terminal instance...');
+            terminal = new Terminal({
+                cursorBlink: true,
+                cursorStyle: 'block',
+                fontSize: 14,
+                fontFamily: 'Courier New, monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    selection: '#ffffff40'
+                },
+                cols: 120,
+                rows: 40
+            });
+            console.log('✅ Terminal instance created');
+            
+            // Add-ons with error handling
+            console.log('🔧 Creating add-ons...');
+            fitAddon = new FitAddon.FitAddon();
+            webLinksAddon = new WebLinksAddon.WebLinksAddon();
+            console.log('✅ Add-ons created');
+            
+            console.log('🔧 Loading add-ons...');
+            terminal.loadAddon(fitAddon);
+            terminal.loadAddon(webLinksAddon);
+            console.log('✅ Add-ons loaded');
 
-        // Mount terminal
-        terminal.open(document.getElementById('terminal'));
-        fitAddon.fit();
+            // Mount terminal with error handling
+            console.log('🔧 Opening terminal...');
+            const terminalElement = document.getElementById('terminal');
+            console.log('Terminal element:', terminalElement);
+            
+            terminal.open(terminalElement);
+            console.log('✅ Terminal opened');
+            
+            // Fit terminal
+            console.log('🔧 Fitting terminal...');
+            fitAddon.fit();
+            console.log('✅ Terminal fitted');
+            
+            // Check if xterm elements were created
+            setTimeout(() => {
+                console.log('🔍 Checking xterm DOM elements...');
+                const xtermElements = document.querySelectorAll('.xterm');
+                const xtermViewport = document.querySelector('.xterm-viewport');
+                const xtermScreen = document.querySelector('.xterm-screen');
+                
+                console.log('Xterm elements:', xtermElements.length);
+                console.log('Xterm viewport:', xtermViewport ? 'Found' : 'Not found');
+                console.log('Xterm screen:', xtermScreen ? 'Found' : 'Not found');
+                
+                if (xtermViewport) {
+                    console.log('✅ Xterm viewport created successfully');
+                    console.log('Viewport dimensions:', {
+                        scrollHeight: xtermViewport.scrollHeight,
+                        clientHeight: xtermViewport.clientHeight,
+                        scrollTop: xtermViewport.scrollTop
+                    });
+                } else {
+                    console.log('❌ Xterm viewport not created - this is why scrolling fails!');
+                }
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Terminal initialization failed:', error);
+            document.getElementById('terminal').innerHTML = 
+                '<div style="color: red; padding: 20px;">❌ Terminal initialization failed: ' + error.message + '</div>';
+        }
 
         // WebSocket connection
         let ws = null;
@@ -175,7 +228,6 @@
         let isLoadingHistory = false;
 
         // Simple real-time duplicate filtering - compare with last sent command
-        let invisibleInputBuffer = '';
         let commandHistory = [];
         let historyIndex = 0;
         let lastSentCommand = '';
