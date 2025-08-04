@@ -489,74 +489,59 @@
             }, 100);
         }
         
+        // Scroll detection for continuous loading (COPIED FROM WORKING terminal.html)
         function setupScrollDetection() {
-            console.log('🔧 Setting up scroll detection...');
+            console.log('🔧 Setting up continuous scroll detection...');
+            
+            // Target the xterm viewport - this is the actual scrollable element!
             const xtermViewport = document.querySelector('.xterm-viewport');
             
             if (xtermViewport) {
-                console.log('✅ Found xterm viewport for scrolling');
-                console.log('📊 Viewport dimensions:', {
+                console.log('✅ Found xterm viewport for continuous scrolling');
+                console.log('🔧 Viewport scroll info:', {
                     scrollHeight: xtermViewport.scrollHeight,
                     clientHeight: xtermViewport.clientHeight,
                     scrollTop: xtermViewport.scrollTop
                 });
                 
-                // Ensure terminal is properly fitted
-                try {
-                    fitAddon.fit();
-                    console.log('✅ Terminal refitted for scrolling');
-                } catch (e) {
-                    console.log('⚠️ Terminal fit error:', e);
-                }
-                
                 xtermViewport.addEventListener('scroll', function(e) {
                     const scrollTop = xtermViewport.scrollTop;
                     const scrollHeight = xtermViewport.scrollHeight;
+                    const clientHeight = xtermViewport.clientHeight;
                     
-                    console.log('📜 Scroll event:', {
-                        scrollTop: scrollTop,
-                        scrollHeight: scrollHeight,
-                        clientHeight: xtermViewport.clientHeight,
-                        loadedHistoryLines: loadedHistoryLines,
-                        totalHistoryLines: totalHistoryLines
-                    });
+                    console.log('📜 Xterm scroll position:', scrollTop, '/', scrollHeight);
                     
+                    // If user scrolled near the top and we have more history
                     if (scrollTop < 200 && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
-                        console.log('🔄 Loading more history...');
-                        loadMoreHistory();
+                        console.log('🔄 Loading more history for continuous scrolling...');
+                        loadMoreHistoryForContinuous();
                     }
                 });
                 
-                console.log('✅ Scroll detection setup complete');
-                
-                // Test scroll functionality
-                setTimeout(() => {
-                    console.log('🧪 Testing scroll to bottom...');
-                    xtermViewport.scrollTop = xtermViewport.scrollHeight;
-                    console.log('📊 After scroll test:', {
-                        scrollTop: xtermViewport.scrollTop,
-                        scrollHeight: xtermViewport.scrollHeight
-                    });
-                }, 2000);
-                
+                console.log('✅ Continuous scroll detection setup complete on xterm viewport');
             } else {
-                console.log('❌ xterm viewport not found, retrying...');
+                console.log('❌ Xterm viewport not found, retrying...');
                 setTimeout(setupScrollDetection, 2000);
             }
         }
         
-        function loadMoreHistory() {
+        // Load more history for continuous scrolling (COPIED FROM WORKING terminal.html)
+        function loadMoreHistoryForContinuous() {
             if (ws && ws.readyState === WebSocket.OPEN && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
                 isLoadingHistory = true;
                 
-                const offset = loadedHistoryLines + 50;
+                const offset = loadedHistoryLines + 50; // Load from where we left off
                 const limit = 50;
                 
-                ws.send(JSON.stringify({
+                console.log('📜 Loading continuous history at offset:', offset, 'total loaded:', loadedHistoryLines, '/', totalHistoryLines);
+                
+                const message = {
                     type: 'load-incremental-history',
                     offset: offset,
                     limit: limit
-                }));
+                };
+                
+                ws.send(JSON.stringify(message));
             }
         }
 
