@@ -780,12 +780,11 @@
           0)))))
 
 (defn route-command [command session-name current-window]
-  "Smart routing: Q commands to Q window, shell commands to current window"
+  "Smart routing: Q commands to main session, shell commands to current window"
   (if (q-command? command)
     (do
-      (println (str "🎯 Q command detected: '" command "' → routing to Q window"))
-      (let [q-window (get-or-create-q-window session-name)]
-        {:window q-window :type :q-command}))
+      (println (str "🎯 Q command detected: '" command "' → routing to main session"))
+      {:window "main" :type :q-command})
     (do
       (println (str "🐚 Shell command detected: '" command "' → routing to current window " current-window))
       {:window current-window :type :shell-command})))
@@ -829,23 +828,27 @@
             (record-sent-command session-id command)
             
             (if (= (:type routing) :q-command)
-              ;; Q command - use Q&A processing
-              (let [q-session-id (str session-name ":" (:window routing))
-                    result (process-qa-command command q-session-id)]
+              ;; Q command - route to main session (where Q is running)
+              (let [terse-session-name (if (str/starts-with? session-name "qq-")
+                                        (subs session-name 3)  ; Remove "qq-" prefix
+                                        session-name)
+                    result (process-qa-command command terse-session-name)]
+                (println (str "🎯 Q command processed in main session: " terse-session-name))
                 (if (:success result)
                   {:type "output" 
                    :content (:output result) 
-                   :targetWindow (:window routing)
+                   :targetWindow "main-session"
                    :commandType "q-command"
                    :success true}
                   {:type "error" 
                    :content (:error result) 
-                   :targetWindow (:window routing)
+                   :targetWindow "main-session"
                    :success false}))
               ;; Shell command - send to current window
-              (let [shell-session-id (str session-name ":" (:window routing))
-                    result (p/process ["tmux" "send-keys" "-t" shell-session-id command "Enter"]
-                                     {:out :string})]
+              (let [shell-session-target (str session-name ":" (:window routing))
+                    result (p/process ["tmux" "send-keys" "-t" shell-session-target command "Enter"]
+                                     {:out :string :err :string})]
+                (println (str "🐚 Shell command sent to: " shell-session-target))
                 (if (= 0 (:exit @result))
                   {:type "shell-command-sent"
                    :content (str "Command sent to window " (:window routing))
@@ -853,7 +856,7 @@
                    :commandType "shell-command"
                    :success true}
                   {:type "error"
-                   :content "Failed to send shell command"
+                   :content (str "Failed to send shell command: " (:err @result))
                    :targetWindow (:window routing)
                    :success false})))))
         
