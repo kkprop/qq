@@ -591,6 +591,20 @@
          :clients (count @streaming-clients)
          :success true}
         
+        ;; 📜 NEW: Load incremental history
+        "load-incremental-history"
+        (let [session-name (or (:session parsed) "qq-default")
+              offset (or (:offset parsed) 50)
+              limit (or (:limit parsed) 50)]
+          (println (str "📜 Loading incremental history: session=" session-name " offset=" offset " limit=" limit))
+          (load-incremental-history client-socket session-name offset limit)
+          {:type "incremental-history-requested"
+           :content (str "Loading " limit " lines at offset " offset)
+           :session session-name
+           :offset offset
+           :limit limit
+           :success true})
+        
         ;; Default case
         {:type "error" :content "Unknown message type"}))
     

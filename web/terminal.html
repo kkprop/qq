@@ -85,6 +85,28 @@
             right: 0;
             bottom: 0;
             padding: 8px;
+            /* Enable scrollbar */
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
+        /* Custom scrollbar styling */
+        .terminal-wrapper::-webkit-scrollbar {
+            width: 12px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-track {
+            background: #2d2d2d;
+            border-radius: 6px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-thumb {
+            background: #666;
+            border-radius: 6px;
+        }
+        
+        .terminal-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #888;
         }
         
         #terminal {
@@ -189,11 +211,13 @@
         let currentSessionId = null;
         let inputBuffer = '';
         
-        // 🚀 Smart incremental loading state
+        // 🚀 Continuous scrollable buffer state
         let aggressiveMirroringActive = true;
         let tmuxHistoryLoaded = false;
         let totalHistoryLines = 0;
-        let currentOffset = 50; // Start after current page
+        let loadedHistoryLines = 0; // Track how much history we've loaded
+        let historyBuffer = []; // Store all loaded history lines
+        let isLoadingHistory = false;
         let cursorPosition = 0;
         let commandHistory = [];
         let historyIndex = -1;
@@ -210,32 +234,105 @@
                                            status === 'connecting' ? '#ffff00' : '#ff0000';
         }
 
-        // Scroll detection for incremental loading
+        // Build continuous scrollable buffer like real tmux
+        function buildContinuousBuffer() {
+            // Clear terminal and rebuild from history buffer
+            terminal.clear();
+            
+            // Write all loaded history in order (oldest to newest)
+            for (let i = 0; i < historyBuffer.length; i++) {
+                terminal.write(historyBuffer[i] + '\r\n');
+            }
+            
+            console.log('📜 Rebuilt continuous buffer with', historyBuffer.length, 'lines');
+        }
+        
+        // Add history lines to the beginning of buffer (older content)
+        function prependHistoryToBuffer(newHistoryLines) {
+            // Add new history lines to the beginning
+            historyBuffer = newHistoryLines.concat(historyBuffer);
+            loadedHistoryLines += newHistoryLines.length;
+            
+            console.log('📜 Added', newHistoryLines.length, 'history lines. Total:', historyBuffer.length);
+            
+            // Rebuild the continuous buffer
+            buildContinuousBuffer();
+            
+            // Scroll to maintain user's position (scroll down to where they were)
+            setTimeout(() => {
+                const terminalWrapper = document.querySelector('.terminal-wrapper');
+                if (terminalWrapper) {
+                    // Scroll down to maintain relative position
+                    terminalWrapper.scrollTop = newHistoryLines.length * 20; // Approximate line height
+                }
+            }, 100);
+        }
+        
+        // Scroll detection for continuous loading
         function setupScrollDetection() {
-            const terminalElement = document.getElementById('terminal');
-            if (terminalElement) {
-                terminalElement.addEventListener('scroll', function() {
-                    // Check if user scrolled near the top
-                    if (terminalElement.scrollTop < 100 && totalHistoryLines > currentOffset) {
-                        loadMoreHistory();
+            console.log('🔧 Setting up continuous scroll detection...');
+            
+            const terminalWrapper = document.querySelector('.terminal-wrapper');
+            
+            if (terminalWrapper) {
+                console.log('✅ Found terminal wrapper for continuous scrolling');
+                
+                terminalWrapper.addEventListener('scroll', function(e) {
+                    const scrollTop = terminalWrapper.scrollTop;
+                    const scrollHeight = terminalWrapper.scrollHeight;
+                    const clientHeight = terminalWrapper.clientHeight;
+                    
+                    console.log('📜 Scroll position:', scrollTop, '/', scrollHeight);
+                    
+                    // If user scrolled near the top and we have more history
+                    if (scrollTop < 200 && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
+                        console.log('🔄 Loading more history for continuous scrolling...');
+                        loadMoreHistoryForContinuous();
                     }
+                });
+                
+                console.log('✅ Continuous scroll detection setup complete');
+            } else {
+                console.log('❌ Terminal wrapper not found, retrying...');
+                setTimeout(setupScrollDetection, 2000);
+            }
+        }
+        
+        // Load more history for continuous scrolling
+        function loadMoreHistoryForContinuous() {
+            if (ws && ws.readyState === WebSocket.OPEN && loadedHistoryLines < totalHistoryLines && !isLoadingHistory) {
+                isLoadingHistory = true;
+                
+                const offset = loadedHistoryLines + 50; // Load from where we left off
+                const limit = 50;
+                
+                console.log('📜 Loading continuous history at offset:', offset, 'total loaded:', loadedHistoryLines, '/', totalHistoryLines);
+                
+                const message = {
+                    type: 'load-incremental-history',
+                    offset: offset,
+                    limit: limit
+                };
+                
+                try {
+                    ws.send(JSON.stringify(message));
+                    console.log('✅ Continuous history request sent');
+                } catch (error) {
+                    console.error('❌ Error sending continuous history request:', error);
+                    isLoadingHistory = false;
+                }
+            } else {
+                console.log('❌ Cannot load more continuous history:', {
+                    wsReady: ws && ws.readyState === WebSocket.OPEN,
+                    hasMore: loadedHistoryLines < totalHistoryLines,
+                    isLoading: isLoadingHistory,
+                    loaded: loadedHistoryLines,
+                    total: totalHistoryLines
                 });
             }
         }
         
-        // Load more history incrementally
-        function loadMoreHistory() {
-            if (ws && ws.readyState === WebSocket.OPEN && totalHistoryLines > currentOffset) {
-                console.log('📜 Loading more history at offset:', currentOffset);
-                const message = {
-                    type: 'load-incremental-history',
-                    offset: currentOffset,
-                    limit: 50
-                };
-                ws.send(JSON.stringify(message));
-                currentOffset += 50; // Prepare for next load
-            }
-        }
+        function connectWebSocket() {
             updateConnectionStatus('connecting', 'Connecting...');
             
             // Get session ID from URL params or use default
@@ -306,38 +403,49 @@
                                 // Handle pong silently
                                 break;
                             
-                        // 🚀 SMART INCREMENTAL LOADING message types
+                        // 🚀 CONTINUOUS SCROLLABLE BUFFER message types
                         case 'tmux-current-page':
-                            // Handle current page (last 50 lines) - immediate display
+                            // Handle current page - initialize continuous buffer
                             console.log('📄 Current page received:', data.currentPageLines, 'lines');
                             if (data.content && !tmuxHistoryLoaded) {
-                                terminal.clear();
-                                terminal.write('📄 Loading current page...\r\n\r\n');
-                                terminal.write(data.content);
-                                tmuxHistoryLoaded = true;
+                                // Initialize the history buffer with current page
+                                const currentLines = data.content.split('\n');
+                                historyBuffer = currentLines;
+                                loadedHistoryLines = data.currentPageLines;
                                 totalHistoryLines = data.totalLines;
-                                updateMirroringStatus('🚀 Current page loaded (' + data.currentPageLines + '/' + data.totalLines + ' lines)');
                                 
-                                // Setup scroll detection for incremental loading
+                                // Build initial continuous buffer
+                                terminal.clear();
+                                terminal.write('📄 Loading continuous tmux history...\r\n\r\n');
+                                buildContinuousBuffer();
+                                
+                                tmuxHistoryLoaded = true;
+                                updateMirroringStatus('🚀 Continuous buffer loaded (' + loadedHistoryLines + '/' + totalHistoryLines + ' lines)');
+                                
+                                // Setup scroll detection for continuous loading
                                 setTimeout(setupScrollDetection, 1000);
                                 
-                                if (data.hasMoreHistory) {
-                                    console.log('📜 More history available for incremental loading');
-                                }
+                                // Scroll to bottom to show most recent content
+                                setTimeout(() => {
+                                    const terminalWrapper = document.querySelector('.terminal-wrapper');
+                                    if (terminalWrapper) {
+                                        terminalWrapper.scrollTop = terminalWrapper.scrollHeight;
+                                    }
+                                }, 500);
+                                
+                                console.log('✅ Continuous buffer initialized');
                             }
                             break;
                             
                         case 'tmux-incremental-history':
-                            // Handle incremental history loading
-                            console.log('📜 Incremental history received:', data.limit, 'lines at offset', data.offset);
+                            // Handle incremental history - add to continuous buffer
+                            console.log('📜 Incremental history received:', data.limit, 'lines');
                             if (data.content) {
-                                // Prepend history content to terminal
-                                const currentContent = terminal.buffer.active.getLine(0);
-                                terminal.clear();
-                                terminal.write(data.content + '\r\n\r\n');
-                                // Re-add current content (this is simplified - real implementation would be more sophisticated)
-                                updateMirroringStatus('📜 History loaded (' + (totalHistoryLines - data.offset) + '/' + totalHistoryLines + ' lines)');
+                                const newHistoryLines = data.content.split('\n').filter(line => line.trim() !== '');
+                                prependHistoryToBuffer(newHistoryLines);
+                                updateMirroringStatus('📜 Continuous buffer: ' + loadedHistoryLines + '/' + totalHistoryLines + ' lines loaded');
                             }
+                            isLoadingHistory = false;
                             break;
                                 
                             case 'tmux-full-sync':
@@ -353,8 +461,14 @@
                                 break;
                                 
                             case 'tmux-realtime':
-                                // Handle real-time tmux updates with smart spinner handling
+                                // Handle real-time tmux updates - add to continuous buffer
                                 if (data.content && tmuxHistoryLoaded) {
+                                    // Add new real-time content to the buffer
+                                    const newLines = data.content.split('\n').filter(line => line.trim() !== '');
+                                    if (newLines.length > 0) {
+                                        historyBuffer = historyBuffer.concat(newLines);
+                                    }
+                                    
                                     // Check for spinner patterns that should overwrite
                                     if (data.content.includes('Thinking...') && data.content.includes('\r')) {
                                         // Handle spinner - move cursor to beginning of line and overwrite
@@ -363,8 +477,19 @@
                                         // Other carriage return content - handle as overwrite
                                         terminal.write(data.content);
                                     } else {
-                                        // Regular content - add newline
+                                        // Regular content - add to continuous buffer and display
                                         terminal.write(data.content + '\r\n');
+                                        
+                                        // Auto-scroll to bottom for new content
+                                        setTimeout(() => {
+                                            const terminalWrapper = document.querySelector('.terminal-wrapper');
+                                            if (terminalWrapper) {
+                                                const isNearBottom = terminalWrapper.scrollTop + terminalWrapper.clientHeight >= terminalWrapper.scrollHeight - 100;
+                                                if (isNearBottom) {
+                                                    terminalWrapper.scrollTop = terminalWrapper.scrollHeight;
+                                                }
+                                            }
+                                        }, 50);
                                     }
                                 }
                                 break;
