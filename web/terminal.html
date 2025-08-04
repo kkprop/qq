@@ -373,13 +373,13 @@
                         
                         switch(data.type) {
                             case 'output':
-                                // Write content safely to avoid parsing errors
-                                if (data.content) {
-                                    terminal.write(data.content);
-                                    // Always add newline and prompt with standard sequences
-                                    terminal.write('\r\n$ ');
-                                }
-                                console.log('Prompt added after output');
+                                // DISABLED: Let tmux real-time mirroring handle all output
+                                // This prevents duplicate responses
+                                console.log('WebSocket output received but ignored - using tmux mirroring');
+                                // if (data.content) {
+                                //     terminal.write(data.content);
+                                //     terminal.write('\\r\\n$ ');
+                                // }
                                 break;
                             case 'error':
                                 terminal.write('❌ Error: ' + (data.content || 'Unknown error'));
@@ -721,8 +721,8 @@
                                 session: currentSessionId
                             }));
                             
-                            // Show processing indicator
-                            terminal.write('⏳ Processing...\r\n');
+                            // Don't show processing indicator - let tmux mirroring handle display
+                            // terminal.write('⏳ Processing...\\r\\n'); // REMOVED for real tmux experience
                         } catch (error) {
                             console.error('Error sending WebSocket message:', error);
                             terminal.write('❌ Error sending command\r\n$ ');
