@@ -45,8 +45,8 @@
             gap: 12px;
         }
         
-        /* NEW: Window controls styling */
-        .window-controls {
+        /* NEW: Tab-style window controls styling */
+        .window-tabs {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -56,24 +56,61 @@
             border: 1px solid #555;
         }
         
-        .window-controls label {
-            font-size: 12px;
-            color: #ccc;
+        .tabs-container {
+            display: flex;
+            gap: 2px;
         }
         
-        .window-selector {
+        .window-tab {
             background: #2d2d2d;
-            color: #fff;
+            color: #ccc;
             border: 1px solid #555;
-            border-radius: 3px;
-            padding: 2px 6px;
+            border-radius: 4px 4px 0 0;
+            padding: 4px 12px;
             font-size: 12px;
-            min-width: 120px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
         }
         
-        .window-selector:focus {
-            outline: none;
+        .window-tab:hover {
+            background: #4d4d4d;
+            color: #fff;
+        }
+        
+        .window-tab.active {
+            background: #4CAF50;
+            color: #fff;
             border-color: #4CAF50;
+        }
+        
+        .window-tab.has-activity {
+            background: #ff9800;
+            color: #fff;
+            border-color: #ff9800;
+        }
+        
+        .window-tab.has-activity::after {
+            content: '•';
+            position: absolute;
+            top: -2px;
+            right: 2px;
+            font-size: 16px;
+            color: #fff;
+        }
+        
+        .new-window-btn {
+            background: #4CAF50;
+            color: #fff;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .new-window-btn:hover {
+            background: #45a049;
         }
         
         .session-status {
@@ -173,13 +210,12 @@
                 <span id="sessionDetails">Ready to connect...</span>
             </div>
             
-            <!-- NEW: Window switching controls -->
-            <div class="window-controls">
-                <label for="windowSelect">Window:</label>
-                <select id="windowSelect" class="window-selector">
-                    <option value="">Loading windows...</option>
-                </select>
-                <button class="control-btn" onclick="createNewWindow()" title="Create new window">+</button>
+            <!-- NEW: Tab-style window controls -->
+            <div class="window-tabs">
+                <div id="windowTabs" class="tabs-container">
+                    <!-- Tabs will be populated dynamically -->
+                </div>
+                <button class="control-btn new-window-btn" onclick="createNewWindow()" title="Create new window">+ New</button>
                 <button class="control-btn" onclick="refreshWindows()" title="Refresh windows">⟳</button>
             </div>
             
@@ -258,6 +294,7 @@
         let currentSessionName = 'qq-default';
         let currentWindowIndex = null;
         let availableWindows = [];
+        let windowActivity = {}; // Track activity per window
         
         // Window management functions
         function refreshWindows() {
@@ -283,9 +320,11 @@
                 // Update current window
                 currentWindowIndex = windowIndex;
                 
-                console.log('🎯 Window switch requested - content will be synchronized automatically');
+                // Clear activity indicator for this window
+                delete windowActivity[windowIndex];
+                updateWindowTabs(availableWindows);
                 
-                // No need to reconnect - content synchronization handles display
+                console.log('🎯 Window switch requested - content will be synchronized automatically');
             }
         }
         
@@ -304,32 +343,47 @@
             }
         }
         
-        function updateWindowSelector(windows) {
-            const selector = document.getElementById('windowSelect');
-            selector.innerHTML = '';
+        function markWindowActivity(windowIndex) {
+            if (windowIndex !== currentWindowIndex && windowIndex !== "main-session") {
+                windowActivity[windowIndex] = true;
+                updateWindowTabs(availableWindows);
+                console.log('📝 Marked activity for window:', windowIndex);
+            }
+        }
+        
+        function updateWindowTabs(windows) {
+            const tabsContainer = document.getElementById('windowTabs');
+            tabsContainer.innerHTML = '';
             
             availableWindows = windows;
             
             windows.forEach(window => {
-                const option = document.createElement('option');
-                option.value = window.index;
-                option.textContent = `${window.index}: ${window.name}${window.active ? ' *' : ''}`;
+                const tab = document.createElement('div');
+                tab.className = 'window-tab';
+                tab.textContent = `${window.index}: ${window.name}`;
+                
+                // Mark active window
                 if (window.active) {
-                    option.selected = true;
+                    tab.classList.add('active');
                     currentWindowIndex = window.index;
                 }
-                selector.appendChild(option);
+                
+                // Mark windows with activity
+                if (windowActivity[window.index]) {
+                    tab.classList.add('has-activity');
+                }
+                
+                // Add click handler
+                tab.onclick = function() {
+                    if (window.index !== currentWindowIndex) {
+                        switchToWindow(window.index);
+                    }
+                };
+                
+                tabsContainer.appendChild(tab);
             });
             
-            // Add event listener for window switching
-            selector.onchange = function() {
-                const selectedWindow = parseInt(this.value);
-                if (selectedWindow !== currentWindowIndex) {
-                    switchToWindow(selectedWindow);
-                }
-            };
-            
-            console.log('✅ Window selector updated with', windows.length, 'windows');
+            console.log('✅ Window tabs updated with', windows.length, 'windows');
         }
         let inputBuffer = '';
         
@@ -658,7 +712,7 @@
                             // 🪟 NEW: Window management message handlers
                             case 'windows-list':
                                 console.log('📋 Received windows list:', data.windows);
-                                updateWindowSelector(data.windows);
+                                updateWindowTabs(data.windows);
                                 break;
                                 
                             case 'window-selected':
@@ -695,25 +749,25 @@
                                 setTimeout(() => refreshWindows(), 1000);
                                 break;
                                 
-                            // 🎯 NEW: Smart routing response handlers
+                            // 🎯 NEW: Smart routing response handlers with activity tracking
                             case 'shell-command-sent':
                                 console.log('🐚 Shell command sent to window:', data.targetWindow);
-                                // Command sent to shell, response will come via tmux mirroring
+                                // Mark activity if not current window
+                                markWindowActivity(data.targetWindow);
                                 break;
                                 
                             case 'output':
-                                // Q command response - display immediately
-                                if (data.commandType === 'q-command') {
-                                    console.log('🎯 Q command response received for window:', data.targetWindow);
+                                // Smart rendering: only show if current window or Q response
+                                if (data.targetWindow === currentWindowIndex || data.targetWindow === "main-session") {
+                                    console.log('📺 Rendering output for current window/Q response');
                                     if (data.content) {
-                                        // Display Q response in terminal
                                         terminal.write('\r\n');
                                         terminal.write(data.content);
                                         terminal.write('\r\n$ ');
                                     }
                                 } else {
-                                    // Regular output handling
-                                    console.log('WebSocket output received but ignored - using tmux mirroring');
+                                    console.log(`📝 Output received for window ${data.targetWindow} (not currently viewed) - marking activity`);
+                                    markWindowActivity(data.targetWindow);
                                 }
                                 break;
                                 
