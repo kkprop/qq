@@ -377,21 +377,40 @@
       (println (str "❌ Error listing windows: " (.getMessage e)))
       [])))
 
+(defn get-window-content [session-name window-index]
+  "Get current content of a specific tmux window"
+  (try
+    (let [window-target (str session-name ":" window-index)
+          result (p/process ["tmux" "capture-pane" "-t" window-target "-p"] 
+                           {:out :string})]
+      (if (= 0 (:exit @result))
+        (let [content (:out @result)]
+          (println (str "📄 Captured content from window " window-index ": " (count content) " chars"))
+          content)
+        (do
+          (println (str "❌ Failed to capture window content: " (:err @result)))
+          "")))
+    (catch Exception e
+      (println (str "❌ Error capturing window content: " (.getMessage e)))
+      "")))
+
 (defn select-tmux-window [session-name window-index]
-  "Select a specific window in tmux session"
+  "Select a specific window in tmux session and return its content"
   (try
     (let [result (p/process ["tmux" "select-window" "-t" (str session-name ":" window-index)]
                            {:out :string})]
       (if (= 0 (:exit @result))
         (do
           (println (str "✅ Selected window " window-index " in session " session-name))
-          true)
+          ;; Get the content of the newly selected window
+          (let [content (get-window-content session-name window-index)]
+            {:success true :content content}))
         (do
           (println (str "❌ Failed to select window: " (:err @result)))
-          false)))
+          {:success false :content ""})))
     (catch Exception e
       (println (str "❌ Error selecting window: " (.getMessage e)))
-      false)))
+      {:success false :content ""})))
 
 (defn create-tmux-window [session-name]
   "Create a new window in tmux session"
@@ -809,11 +828,16 @@
         
         "select-window"
         (let [session-name (or (:session parsed) "qq-default")
-              window-index (:window parsed)]
-          (if (select-tmux-window session-name window-index)
+              window-index (:window parsed)
+              result (select-tmux-window session-name window-index)]
+          (if (:success result)
             (do
               (println (str "✅ Selected window " window-index " in session " session-name))
-              {:type "window-selected" :window window-index :session session-name :success true})
+              {:type "window-selected" 
+               :window window-index 
+               :session session-name 
+               :content (:content result)
+               :success true})
             {:type "error" :content "Failed to select window" :success false}))
         
         "new-window"

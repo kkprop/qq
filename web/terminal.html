@@ -273,7 +273,7 @@
         function switchToWindow(windowIndex) {
             console.log('🔄 Switching to window:', windowIndex);
             if (ws && ws.readyState === WebSocket.OPEN) {
-                // Switch tmux to the selected window
+                // Switch tmux to the selected window and get its content
                 ws.send(JSON.stringify({
                     type: 'select-window',
                     session: currentSessionName,
@@ -283,10 +283,9 @@
                 // Update current window
                 currentWindowIndex = windowIndex;
                 
-                // Reconnect to mirror the new window
-                setTimeout(() => {
-                    reconnectWebSocket();
-                }, 500);
+                console.log('🎯 Window switch requested - content will be synchronized automatically');
+                
+                // No need to reconnect - content synchronization handles display
             }
         }
         
@@ -664,6 +663,28 @@
                                 
                             case 'window-selected':
                                 console.log('✅ Window selected:', data.window);
+                                
+                                // 🎯 NEW: Display the actual window content immediately
+                                if (data.content) {
+                                    console.log('📄 Displaying window content:', data.content.length, 'chars');
+                                    
+                                    // Clear terminal and show the actual window content
+                                    terminal.clear();
+                                    
+                                    // Split content into lines and display
+                                    const lines = data.content.split('\n');
+                                    lines.forEach(line => {
+                                        terminal.writeln(line);
+                                    });
+                                    
+                                    // Add prompt at the end
+                                    terminal.write('\r\n$ ');
+                                    
+                                    console.log('✅ Window content synchronized with tmux');
+                                } else {
+                                    console.log('⚠️ No content received for window switch');
+                                }
+                                
                                 // Refresh windows list to update active status
                                 setTimeout(() => refreshWindows(), 500);
                                 break;
