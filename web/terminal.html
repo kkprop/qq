@@ -287,7 +287,11 @@
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(webLinksAddon);
 
-        // 📋 ADD CLIPBOARD FUNCTIONALITY
+        // Mount terminal
+        terminal.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        // 📋 ADD CLIPBOARD FUNCTIONALITY AFTER TERMINAL IS MOUNTED
         // Enable text selection with mouse drag
         terminal.onSelectionChange(() => {
             const selection = terminal.getSelection();
@@ -332,7 +336,7 @@
             return true; // Allow other key events
         });
 
-        // Add right-click context menu for copy/paste
+        // Add right-click context menu for copy/paste (NOW terminal.element exists)
         terminal.element.addEventListener('contextmenu', (event) => {
             event.preventDefault();
             
@@ -408,10 +412,6 @@
             };
             setTimeout(() => document.addEventListener('click', removeMenu), 100);
         });
-
-        // Mount terminal
-        terminal.open(document.getElementById('terminal'));
-        fitAddon.fit();
 
         // WebSocket connection
         let ws = null;
