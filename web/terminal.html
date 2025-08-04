@@ -35,12 +35,45 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
         }
         
         .session-info {
             display: flex;
             align-items: center;
             gap: 12px;
+        }
+        
+        /* NEW: Window controls styling */
+        .window-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #3d3d3d;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+        }
+        
+        .window-controls label {
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        .window-selector {
+            background: #2d2d2d;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 12px;
+            min-width: 120px;
+        }
+        
+        .window-selector:focus {
+            outline: none;
+            border-color: #4CAF50;
         }
         
         .session-status {
@@ -139,6 +172,17 @@
                 <span id="sessionName">Q Session Terminal</span>
                 <span id="sessionDetails">Ready to connect...</span>
             </div>
+            
+            <!-- NEW: Window switching controls -->
+            <div class="window-controls">
+                <label for="windowSelect">Window:</label>
+                <select id="windowSelect" class="window-selector">
+                    <option value="">Loading windows...</option>
+                </select>
+                <button class="control-btn" onclick="createNewWindow()" title="Create new window">+</button>
+                <button class="control-btn" onclick="refreshWindows()" title="Refresh windows">⟳</button>
+            </div>
+            
             <div class="terminal-controls">
                 <button class="control-btn" onclick="terminal.clear()">Clear</button>
                 <button class="control-btn" onclick="reconnectWebSocket()">Reconnect</button>
@@ -209,6 +253,85 @@
         // WebSocket connection
         let ws = null;
         let currentSessionId = null;
+        
+        // Window management variables
+        let currentSessionName = 'qq-default';
+        let currentWindowIndex = null;
+        let availableWindows = [];
+        
+        // Window management functions
+        function refreshWindows() {
+            console.log('🔄 Refreshing tmux windows...');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'list-windows',
+                    session: currentSessionName
+                }));
+            }
+        }
+        
+        function switchToWindow(windowIndex) {
+            console.log('🔄 Switching to window:', windowIndex);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Switch tmux to the selected window
+                ws.send(JSON.stringify({
+                    type: 'select-window',
+                    session: currentSessionName,
+                    window: windowIndex
+                }));
+                
+                // Update current window
+                currentWindowIndex = windowIndex;
+                
+                // Reconnect to mirror the new window
+                setTimeout(() => {
+                    reconnectWebSocket();
+                }, 500);
+            }
+        }
+        
+        function createNewWindow() {
+            console.log('➕ Creating new tmux window...');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'new-window',
+                    session: currentSessionName
+                }));
+                
+                // Refresh windows list after creation
+                setTimeout(() => {
+                    refreshWindows();
+                }, 1000);
+            }
+        }
+        
+        function updateWindowSelector(windows) {
+            const selector = document.getElementById('windowSelect');
+            selector.innerHTML = '';
+            
+            availableWindows = windows;
+            
+            windows.forEach(window => {
+                const option = document.createElement('option');
+                option.value = window.index;
+                option.textContent = `${window.index}: ${window.name}${window.active ? ' *' : ''}`;
+                if (window.active) {
+                    option.selected = true;
+                    currentWindowIndex = window.index;
+                }
+                selector.appendChild(option);
+            });
+            
+            // Add event listener for window switching
+            selector.onchange = function() {
+                const selectedWindow = parseInt(this.value);
+                if (selectedWindow !== currentWindowIndex) {
+                    switchToWindow(selectedWindow);
+                }
+            };
+            
+            console.log('✅ Window selector updated with', windows.length, 'windows');
+        }
         let inputBuffer = '';
         
         // 🚀 Continuous scrollable buffer state
@@ -364,6 +487,11 @@
                     terminal.writeln('💡 Use Ctrl+C to interrupt, Ctrl+D to exit');
                     terminal.writeln('');
                     terminal.write('$ ');
+                    
+                    // 🪟 NEW: Refresh windows list when connected
+                    setTimeout(() => {
+                        refreshWindows();
+                    }, 1000);
                 };
                 
                 ws.onmessage = function(event) {
@@ -526,6 +654,24 @@
                             case 'streaming-stopped':
                                 // Mirroring stopped
                                 updateMirroringStatus('🛑 Mirroring inactive');
+                                break;
+                                
+                            // 🪟 NEW: Window management message handlers
+                            case 'windows-list':
+                                console.log('📋 Received windows list:', data.windows);
+                                updateWindowSelector(data.windows);
+                                break;
+                                
+                            case 'window-selected':
+                                console.log('✅ Window selected:', data.window);
+                                // Refresh windows list to update active status
+                                setTimeout(() => refreshWindows(), 500);
+                                break;
+                                
+                            case 'window-created':
+                                console.log('✅ New window created');
+                                // Refresh windows list to show new window
+                                setTimeout(() => refreshWindows(), 1000);
                                 break;
                                 
                             default:

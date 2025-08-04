@@ -358,6 +358,57 @@
                  "Access-Control-Allow-Origin" "*"}
        :body (json/write-str {:success false :error (.getMessage e)})})))
 
+;; Window management functions
+(defn list-tmux-windows [session-name]
+  "List all windows in a tmux session"
+  (try
+    (let [result (p/process ["tmux" "list-windows" "-t" session-name "-F" "#{window_index}:#{window_name}:#{window_active}"] 
+                           {:out :string})]
+      (if (= 0 (:exit @result))
+        (let [output (:out @result)
+              lines (str/split-lines output)]
+          (map (fn [line]
+                 (let [[index name active] (str/split line #":")]
+                   {:index (Integer/parseInt index)
+                    :name name
+                    :active (= active "1")})) lines))
+        []))
+    (catch Exception e
+      (println (str "❌ Error listing windows: " (.getMessage e)))
+      [])))
+
+(defn select-tmux-window [session-name window-index]
+  "Select a specific window in tmux session"
+  (try
+    (let [result (p/process ["tmux" "select-window" "-t" (str session-name ":" window-index)]
+                           {:out :string})]
+      (if (= 0 (:exit @result))
+        (do
+          (println (str "✅ Selected window " window-index " in session " session-name))
+          true)
+        (do
+          (println (str "❌ Failed to select window: " (:err @result)))
+          false)))
+    (catch Exception e
+      (println (str "❌ Error selecting window: " (.getMessage e)))
+      false)))
+
+(defn create-tmux-window [session-name]
+  "Create a new window in tmux session"
+  (try
+    (let [result (p/process ["tmux" "new-window" "-t" session-name]
+                           {:out :string})]
+      (if (= 0 (:exit @result))
+        (do
+          (println (str "✅ Created new window in session " session-name))
+          true)
+        (do
+          (println (str "❌ Failed to create window: " (:err @result)))
+          false)))
+    (catch Exception e
+      (println (str "❌ Error creating window: " (.getMessage e)))
+      false)))
+
 (defn restart-pipe-pane-if-needed
   "Check and restart pipe-pane if it's inactive"
   [session-name output-file]
@@ -748,6 +799,30 @@
            :offset offset
            :limit limit
            :success true})
+        
+        ;; 🪟 NEW: Window management commands
+        "list-windows"
+        (let [session-name (or (:session parsed) "qq-default")
+              windows (list-tmux-windows session-name)]
+          (println (str "📋 Listed " (count windows) " windows for session " session-name))
+          {:type "windows-list" :windows windows :session session-name :success true})
+        
+        "select-window"
+        (let [session-name (or (:session parsed) "qq-default")
+              window-index (:window parsed)]
+          (if (select-tmux-window session-name window-index)
+            (do
+              (println (str "✅ Selected window " window-index " in session " session-name))
+              {:type "window-selected" :window window-index :session session-name :success true})
+            {:type "error" :content "Failed to select window" :success false}))
+        
+        "new-window"
+        (let [session-name (or (:session parsed) "qq-default")]
+          (if (create-tmux-window session-name)
+            (do
+              (println (str "✅ Created new window in session " session-name))
+              {:type "window-created" :session session-name :success true})
+            {:type "error" :content "Failed to create window" :success false}))
         
         ;; Default case
         {:type "error" :content "Unknown message type"}))
