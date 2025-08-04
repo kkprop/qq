@@ -879,23 +879,21 @@
                             case 'window-selected':
                                 console.log('✅ Window selected:', data.window);
                                 
-                                // 🎯 NEW: Display the actual window content immediately
+                                // 🎯 DISPLAY WINDOW CONTENT WITH PRESERVED FORMATTING
                                 if (data.content) {
                                     console.log('📄 Displaying window content:', data.content.length, 'chars');
                                     
                                     // Clear terminal and show the actual window content
                                     terminal.clear();
                                     
-                                    // Split content into lines and display
-                                    const lines = data.content.split('\n');
-                                    lines.forEach(line => {
-                                        terminal.writeln(line);
-                                    });
+                                    // 🔧 FIX: Use raw content to preserve formatting
+                                    // Don't split into lines - let XTerm.js handle the formatting
+                                    terminal.write(data.content);
                                     
                                     // Add prompt at the end
                                     terminal.write('\r\n$ ');
                                     
-                                    console.log('✅ Window content synchronized with tmux');
+                                    console.log('✅ Window content synchronized with tmux (formatting preserved)');
                                 } else {
                                     console.log('⚠️ No content received for window switch');
                                 }
