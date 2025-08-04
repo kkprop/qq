@@ -49,46 +49,101 @@
 
 ;; 🚀 AGGRESSIVE TMUX MIRRORING FUNCTIONS
 
-;; Store active WebSocket clients for mirroring
+;; Enhanced WebSocket connection management
 (def streaming-clients (atom #{}))
+(def client-heartbeats (atom {})) ; Track last heartbeat for each client
+(def client-metadata (atom {}))   ; Store connection metadata
 
-(defn add-streaming-client [client-socket]
-  "Add a client socket to streaming clients"
-  (swap! streaming-clients conj client-socket)
-  (println (str "📡 Added mirroring client. Total clients: " (count @streaming-clients))))
+(defn add-streaming-client [client-socket connection-id]
+  "Add client with metadata tracking"
+  (let [client-info {:socket client-socket
+                     :connection-id connection-id
+                     :connected-at (System/currentTimeMillis)
+                     :last-heartbeat (System/currentTimeMillis)}]
+    (swap! streaming-clients conj client-socket)
+    (swap! client-metadata assoc client-socket client-info)
+    (swap! client-heartbeats assoc client-socket (System/currentTimeMillis))
+    (println (str "📡 Added streaming client [" connection-id "]. Total clients: " (count @streaming-clients)))))
 
 (defn remove-streaming-client [client-socket]
-  "Remove a client socket from streaming clients"
-  (swap! streaming-clients disj client-socket)
-  (println (str "📡 Removed mirroring client. Total clients: " (count @streaming-clients))))
+  "Remove client and cleanup metadata"
+  (let [client-info (get @client-metadata client-socket)]
+    (swap! streaming-clients disj client-socket)
+    (swap! client-metadata dissoc client-socket)
+    (swap! client-heartbeats dissoc client-socket)
+    (when client-info
+      (println (str "📡 Removed streaming client [" (:connection-id client-info) "]. Total clients: " (count @streaming-clients))))))
+
+(defn is-websocket-alive? [client-socket]
+  "Comprehensive WebSocket connection health check"
+  (try
+    (and client-socket
+         (.isConnected client-socket)
+         (not (.isClosed client-socket))
+         (not (.isInputShutdown client-socket))
+         (not (.isOutputShutdown client-socket)))
+    (catch Exception e
+      false)))
+
+(defn cleanup-dead-connections []
+  "Remove dead connections from streaming clients"
+  (let [dead-clients (atom [])]
+    (doseq [client-socket @streaming-clients]
+      (let [client-info (get @client-metadata client-socket)]
+        (when (not (is-websocket-alive? client-socket))
+          (println (str "🧹 Removing dead connection [" (:connection-id client-info) "]"))
+          (swap! dead-clients conj client-socket))))
+    
+    ;; Remove all dead clients
+    (doseq [dead-client @dead-clients]
+      (remove-streaming-client dead-client))
+    
+    (when (> (count @dead-clients) 0)
+      (println (str "🧹 Cleaned up " (count @dead-clients) " dead connections. Active: " (count @streaming-clients))))))
 
 (defn broadcast-to-streaming-clients [message]
-  "Broadcast message to all streaming clients with connection validation"
-  (let [valid-clients (atom [])]
-    (doseq [client-socket @streaming-clients]
+  "Broadcast message to all streaming clients with robust error handling"
+  (when (> (count @streaming-clients) 0)
+    (let [successful-sends (atom 0)
+          failed-sends (atom 0)]
+      
+      (doseq [client-socket @streaming-clients]
+        (let [client-info (get @client-metadata client-socket)]
+          (try
+            (if (is-websocket-alive? client-socket)
+              (do
+                (let [output-stream (.getOutputStream client-socket)
+                      json-message (json/write-str message)]
+                  (send-websocket-frame output-stream json-message)
+                  (swap! successful-sends inc)
+                  ;; Update heartbeat on successful send
+                  (swap! client-heartbeats assoc client-socket (System/currentTimeMillis))))
+              (do
+                (swap! failed-sends inc)))
+            (catch Exception e
+              (swap! failed-sends inc)))))
+      
+      ;; Clean up dead connections if we had failures
+      (when (> @failed-sends 0)
+        (cleanup-dead-connections))
+      
+      ;; Only log if there were actual sends attempted
+      (when (and (> (+ @successful-sends @failed-sends) 0) (> @successful-sends 0))
+        (println (str "📡 Broadcast: " @successful-sends " successful" 
+                     (when (> @failed-sends 0) (str ", " @failed-sends " failed"))))))))
+
+;; Background connection cleanup task
+(defn start-connection-cleanup-task []
+  "Start background task to clean up dead connections"
+  (async/go
+    (loop []
       (try
-        ;; Check if connection is still valid
-        (if (and (.isConnected client-socket) (not (.isClosed client-socket)))
-          (do
-            (let [output-stream (.getOutputStream client-socket)
-                  json-message (json/write-str message)]
-              (send-websocket-frame output-stream json-message)
-              ;; Connection successful, keep this client
-              (swap! valid-clients conj client-socket)))
-          (do
-            (println (str "🔌 Removing disconnected client from streaming list"))
-            ;; Don't add to valid clients list
-            ))
+        ;; Clean up dead connections every 30 seconds
+        (async/<! (async/timeout 30000))
+        (cleanup-dead-connections)
         (catch Exception e
-          (println (str "❌ Error broadcasting to client: " (.getMessage e)))
-          (println (str "🔌 Removing failed client from streaming list"))
-          ;; Don't add to valid clients list
-          )))
-    
-    ;; Update streaming clients list with only valid connections
-    (reset! streaming-clients @valid-clients)
-    (when (not= (count @streaming-clients) (count @valid-clients))
-      (println (str "📡 Updated streaming clients: " (count @valid-clients) " active connections")))))
+          (println (str "❌ Error in connection cleanup task: " (.getMessage e)))))
+      (recur))))
 
 (defn capture-full-tmux-history
   "Capture the entire tmux scrollback history"
@@ -301,7 +356,7 @@
   (sync-current-page-tmux-content client-socket session-name)
   
   ;; Step 2: Start real-time streaming
-  (add-streaming-client client-socket)
+  (add-streaming-client client-socket "aggressive-mirror")
   
   (let [output-file (str "/tmp/tmux-mirror-" session-name ".log")]
     
@@ -383,7 +438,7 @@
   (println (str "🌊 Starting tmux streaming for session: " session-name))
   
   ;; Add client to streaming clients
-  (add-streaming-client client-socket)
+  (add-streaming-client client-socket "tmux-stream")
   
   (let [output-file (str "/tmp/tmux-stream-" session-name ".log")]
     
@@ -766,6 +821,10 @@
         
         (swap! server-state assoc :server server-socket)
         (println (str "🌐 THE WebSocket server listening on port " port))
+        
+        ;; Start background connection cleanup task
+        (start-connection-cleanup-task)
+        (println "🧹 Started background connection cleanup task")
         
         (while (:running @server-state)
           (let [client-socket (.accept server-socket)]
