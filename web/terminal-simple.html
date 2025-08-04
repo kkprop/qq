@@ -204,6 +204,10 @@
                         commandHistory.push(invisibleInputBuffer.trim());
                         historyIndex = commandHistory.length;
                         
+                        // EXPERIMENTAL: Clear any potential browser display
+                        // This ensures nothing shows from browser side
+                        terminal.write('\r\x1b[2K'); // Clear current line
+                        
                         // Send command - this will appear via tmux mirroring only
                         ws.send(JSON.stringify({
                             type: 'command',
@@ -213,6 +217,7 @@
                         
                         console.log('🤫 Command sent invisibly:', invisibleInputBuffer.trim());
                         console.log('🔍 Will filter duplicates of:', lastSentCommand);
+                        console.log('🧹 Cleared browser display to prevent any local echo');
                     }
                     invisibleInputBuffer = '';
                     return;
@@ -235,24 +240,43 @@
             }
         });
 
-        // Simple duplicate detection - compare content with last sent command
+        // Enhanced duplicate detection with comprehensive debugging
         function isDuplicateOfLastCommand(content) {
             if (!lastSentCommand || !content) return false;
             
             const cleanContent = content.trim();
             
-            // Check if content matches our last sent command exactly
+            // Debug logging
+            console.log('🔍 Checking for duplicate:');
+            console.log('  Last sent:', JSON.stringify(lastSentCommand));
+            console.log('  Incoming:', JSON.stringify(cleanContent));
+            
+            // Check exact match
             if (cleanContent === lastSentCommand) {
-                console.log('🔍 Exact duplicate detected:', cleanContent);
+                console.log('✅ EXACT MATCH - filtering duplicate');
                 return true;
             }
             
-            // Check if content is just the command without prompt
-            if (cleanContent === lastSentCommand.replace(/^\$\s*/, '').replace(/^>\s*/, '')) {
-                console.log('🔍 Command duplicate detected:', cleanContent);
+            // Check if content is the command without $ prompt
+            const commandWithoutPrompt = lastSentCommand.replace(/^\$\s*/, '').trim();
+            if (cleanContent === commandWithoutPrompt) {
+                console.log('✅ COMMAND MATCH (without $) - filtering duplicate');
                 return true;
             }
             
+            // Check if incoming content contains the command
+            if (cleanContent.includes(lastSentCommand.trim())) {
+                console.log('✅ CONTAINS MATCH - filtering duplicate');
+                return true;
+            }
+            
+            // Check if incoming content is just the command part
+            if (lastSentCommand.includes(cleanContent) && cleanContent.length > 5) {
+                console.log('✅ PARTIAL MATCH - filtering duplicate');
+                return true;
+            }
+            
+            console.log('❌ No match - allowing content');
             return false;
         }
 
@@ -310,13 +334,17 @@
                                 break;
                                 
                             case 'tmux-realtime':
-                                // Simple duplicate filtering - compare with last sent command
+                                // Enhanced duplicate filtering with comprehensive debugging
                                 if (data.content) {
-                                    // Skip if this content is a duplicate of our last sent command
+                                    console.log('📨 Received tmux content:', JSON.stringify(data.content));
+                                    
+                                    // Check for duplicate before processing
                                     if (isDuplicateOfLastCommand(data.content)) {
-                                        console.log('🚫 Filtered duplicate:', data.content.trim());
+                                        console.log('🚫 FILTERED DUPLICATE:', data.content.trim());
                                         return; // Skip displaying this content
                                     }
+                                    
+                                    console.log('✅ Displaying content:', data.content.trim());
                                     
                                     // Add new content to buffer
                                     const newLines = data.content.split('\n').filter(line => line.trim() !== '');
