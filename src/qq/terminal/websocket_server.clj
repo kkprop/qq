@@ -189,9 +189,20 @@
       (println (str "❌ Error checking pipe-pane: " (.getMessage e))))))
 
 (defn start-aggressive-file-monitoring
-  "Monitor file changes for aggressive real-time mirroring"
+  "Monitor file changes for aggressive real-time mirroring with pipe-pane monitoring"
   [output-file session-name]
   (println (str "👁️ Starting aggressive file monitoring: " output-file))
+  
+  ;; Start pipe-pane monitoring in background
+  (async/go
+    (loop []
+      (try
+        ;; Check and restart pipe-pane every 5 seconds
+        (ensure-pipe-pane-active session-name output-file)
+        (catch Exception e
+          (println (str "❌ Error in pipe-pane monitoring: " (.getMessage e)))))
+      (async/<! (async/timeout 5000))
+      (recur)))
   
   (async/go
     (try
