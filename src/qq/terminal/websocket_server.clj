@@ -146,16 +146,16 @@
       (recur))))
 
 (defn capture-full-tmux-history
-  "Capture the entire tmux scrollback history"
+  "Capture the entire tmux scrollback history with formatting preserved"
   [session-name]
   (println (str "📜 Capturing full tmux history for: " session-name))
   (try
-    ;; Capture entire scrollback buffer (-S - means from beginning)
-    (let [result (p/process ["tmux" "capture-pane" "-t" session-name "-S" "-" "-p"] 
+    ;; Capture entire scrollback buffer with ANSI escape sequences (-e flag)
+    (let [result (p/process ["tmux" "capture-pane" "-t" session-name "-S" "-" "-e" "-p"] 
                             {:out :string})]
       (if (= 0 (:exit @result))
         (let [full-content (:out @result)]
-          (println (str "✅ Captured " (count (str/split-lines full-content)) " lines of history"))
+          (println (str "✅ Captured " (count (str/split-lines full-content)) " lines of history with formatting"))
           full-content)
         (do
           (println (str "❌ Failed to capture history: " (:err @result)))
