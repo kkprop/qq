@@ -109,56 +109,61 @@
     (catch Exception e
       (println (str "❌ Error sending simple message: " (.getMessage e))))))
 
-(defn sync-full-tmux-content
-  "Send the entire tmux content to a WebSocket client in chunks to avoid broken pipe"
+(defn sync-current-page-tmux-content
+  "Send only the current page (last 50 lines) for immediate display"
   [client-socket session-name]
-  (println (str "🔄 Syncing full tmux content to client"))
+  (println (str "📄 Syncing current page tmux content to client"))
   (try
     (let [full-content (capture-full-tmux-history session-name)
-          cleaned-content (clean-streaming-content full-content)]
+          lines (str/split-lines full-content)
+          current-page-lines (take-last 50 lines)  ; Just last 50 lines
+          current-page-content (str/join "\n" current-page-lines)
+          cleaned-content (clean-streaming-content current-page-content)]
       (when (not (str/blank? cleaned-content))
-        ;; Split content into smaller chunks to avoid WebSocket frame size issues
-        (let [lines (str/split-lines cleaned-content)
-              chunk-size 50] ; Send 50 lines at a time
-          (println (str "📡 Sending full sync in chunks: " (count lines) " lines, " 
-                       (Math/ceil (/ (count lines) chunk-size)) " chunks"))
-          
-          ;; Send initial sync message
-          (let [initial-message {:type "tmux-full-sync-start"
-                                :totalLines (count lines)  ; Changed from :total-lines to :totalLines
-                                :session session-name
-                                :timestamp (System/currentTimeMillis)}
-                output-stream (.getOutputStream client-socket)
-                json-message (json/write-str initial-message)]
-            (send-websocket-frame output-stream json-message))
-          
-          ;; Send content in chunks with error handling
-          (doseq [chunk-lines (partition-all chunk-size lines)]
-            (try
-              (let [chunk-content (str/join "\n" chunk-lines)
-                    message {:type "tmux-full-sync-chunk"
-                             :content chunk-content
-                             :session session-name
-                             :timestamp (System/currentTimeMillis)}
-                    output-stream (.getOutputStream client-socket)
-                    json-message (json/write-str message)]
-                (send-websocket-frame output-stream json-message)
-                ;; Small delay between chunks to prevent overwhelming
-                (Thread/sleep 50))
-              (catch Exception e
-                (println (str "❌ Error sending chunk: " (.getMessage e)))
-                ;; Don't continue if chunk sending fails
-                (throw e))))
-          
-          ;; Send completion message
-          (let [complete-message {:type "tmux-full-sync-complete"
-                                 :session session-name
-                                 :timestamp (System/currentTimeMillis)}
-                output-stream (.getOutputStream client-socket)
-                json-message (json/write-str complete-message)]
-            (send-websocket-frame output-stream json-message)))))
+        (let [message {:type "tmux-current-page"
+                       :content cleaned-content
+                       :totalLines (count lines)
+                       :currentPageLines (count current-page-lines)
+                       :hasMoreHistory (> (count lines) 50)
+                       :session session-name
+                       :timestamp (System/currentTimeMillis)}
+              output-stream (.getOutputStream client-socket)
+              json-message (json/write-str message)]
+          (println (str "📄 Sending current page: " (count current-page-lines) " lines (total: " (count lines) " available)"))
+          (send-websocket-frame output-stream json-message))))
     (catch Exception e
-      (println (str "❌ Error syncing full content: " (.getMessage e))))))
+      (println (str "❌ Error syncing current page: " (.getMessage e))))))
+
+(defn load-incremental-history
+  "Load more history incrementally when user scrolls up"
+  [client-socket session-name offset limit]
+  (println (str "📜 Loading incremental history: offset=" offset " limit=" limit))
+  (try
+    (let [full-content (capture-full-tmux-history session-name)
+          lines (str/split-lines full-content)
+          total-lines (count lines)
+          start-index (max 0 (- total-lines offset limit))
+          end-index (- total-lines offset)
+          history-lines (subvec (vec lines) start-index end-index)
+          history-content (str/join "\n" history-lines)
+          cleaned-content (clean-streaming-content history-content)]
+      (when (not (str/blank? cleaned-content))
+        (let [message {:type "tmux-incremental-history"
+                       :content cleaned-content
+                       :offset offset
+                       :limit limit
+                       :startIndex start-index
+                       :endIndex end-index
+                       :totalLines total-lines
+                       :hasMore (> start-index 0)
+                       :session session-name
+                       :timestamp (System/currentTimeMillis)}
+              output-stream (.getOutputStream client-socket)
+              json-message (json/write-str message)]
+          (println (str "📜 Sending incremental history: " (count history-lines) " lines (from " start-index " to " end-index ")"))
+          (send-websocket-frame output-stream json-message))))
+    (catch Exception e
+      (println (str "❌ Error loading incremental history: " (.getMessage e))))))
 
 (defn ensure-pipe-pane-active
   "Ensure tmux pipe-pane is active, restart if needed"
@@ -232,8 +237,8 @@
   [session-name client-socket]
   (println (str "🚀 Starting AGGRESSIVE tmux mirroring for: " session-name))
   
-  ;; Step 1: Sync existing content immediately with chunked delivery
-  (sync-full-tmux-content client-socket session-name)
+  ;; Step 1: Sync current page immediately (last 50 lines)
+  (sync-current-page-tmux-content client-socket session-name)
   
   ;; Step 2: Start real-time streaming
   (add-streaming-client client-socket)

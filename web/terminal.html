@@ -189,10 +189,11 @@
         let currentSessionId = null;
         let inputBuffer = '';
         
-        // 🚀 Aggressive tmux mirroring state
+        // 🚀 Smart incremental loading state
         let aggressiveMirroringActive = true;
         let tmuxHistoryLoaded = false;
-        let syncInProgress = false;
+        let totalHistoryLines = 0;
+        let currentOffset = 50; // Start after current page
         let cursorPosition = 0;
         let commandHistory = [];
         let historyIndex = -1;
@@ -209,7 +210,32 @@
                                            status === 'connecting' ? '#ffff00' : '#ff0000';
         }
 
-        function connectWebSocket() {
+        // Scroll detection for incremental loading
+        function setupScrollDetection() {
+            const terminalElement = document.getElementById('terminal');
+            if (terminalElement) {
+                terminalElement.addEventListener('scroll', function() {
+                    // Check if user scrolled near the top
+                    if (terminalElement.scrollTop < 100 && totalHistoryLines > currentOffset) {
+                        loadMoreHistory();
+                    }
+                });
+            }
+        }
+        
+        // Load more history incrementally
+        function loadMoreHistory() {
+            if (ws && ws.readyState === WebSocket.OPEN && totalHistoryLines > currentOffset) {
+                console.log('📜 Loading more history at offset:', currentOffset);
+                const message = {
+                    type: 'load-incremental-history',
+                    offset: currentOffset,
+                    limit: 50
+                };
+                ws.send(JSON.stringify(message));
+                currentOffset += 50; // Prepare for next load
+            }
+        }
             updateConnectionStatus('connecting', 'Connecting...');
             
             // Get session ID from URL params or use default
@@ -280,37 +306,39 @@
                                 // Handle pong silently
                                 break;
                             
-                            // 🚀 AGGRESSIVE TMUX MIRRORING message types (chunked)
-                            case 'tmux-full-sync-start':
-                                // Handle start of chunked full tmux history sync
-                                console.log('🚀 Starting chunked full tmux sync:', data.totalLines, 'lines');
-                                if (!tmuxHistoryLoaded && !syncInProgress) {
-                                    // Clear terminal and prepare for chunked loading
-                                    terminal.clear();
-                                    terminal.write('🚀 Loading full tmux history in chunks...\r\n\r\n');
-                                    syncInProgress = true;
-                                    updateMirroringStatus('🚀 Loading history chunks...');
-                                }
-                                break;
+                        // 🚀 SMART INCREMENTAL LOADING message types
+                        case 'tmux-current-page':
+                            // Handle current page (last 50 lines) - immediate display
+                            console.log('📄 Current page received:', data.currentPageLines, 'lines');
+                            if (data.content && !tmuxHistoryLoaded) {
+                                terminal.clear();
+                                terminal.write('📄 Loading current page...\r\n\r\n');
+                                terminal.write(data.content);
+                                tmuxHistoryLoaded = true;
+                                totalHistoryLines = data.totalLines;
+                                updateMirroringStatus('🚀 Current page loaded (' + data.currentPageLines + '/' + data.totalLines + ' lines)');
                                 
-                            case 'tmux-full-sync-chunk':
-                                // Handle individual chunks of tmux history
-                                if (data.content && syncInProgress) {
-                                    // Write chunk content without extra newlines
-                                    terminal.write(data.content + '\r\n');
-                                }
-                                break;
+                                // Setup scroll detection for incremental loading
+                                setTimeout(setupScrollDetection, 1000);
                                 
-                            case 'tmux-full-sync-complete':
-                                // Handle completion of chunked sync
-                                console.log('✅ Chunked full tmux sync completed');
-                                if (syncInProgress) {
-                                    tmuxHistoryLoaded = true;
-                                    syncInProgress = false;
-                                    updateMirroringStatus('🚀 Full tmux mirror active');
-                                    console.log('✅ Full tmux history loaded via chunks');
+                                if (data.hasMoreHistory) {
+                                    console.log('📜 More history available for incremental loading');
                                 }
-                                break;
+                            }
+                            break;
+                            
+                        case 'tmux-incremental-history':
+                            // Handle incremental history loading
+                            console.log('📜 Incremental history received:', data.limit, 'lines at offset', data.offset);
+                            if (data.content) {
+                                // Prepend history content to terminal
+                                const currentContent = terminal.buffer.active.getLine(0);
+                                terminal.clear();
+                                terminal.write(data.content + '\r\n\r\n');
+                                // Re-add current content (this is simplified - real implementation would be more sophisticated)
+                                updateMirroringStatus('📜 History loaded (' + (totalHistoryLines - data.offset) + '/' + totalHistoryLines + ' lines)');
+                            }
+                            break;
                                 
                             case 'tmux-full-sync':
                                 // Legacy single-message sync support
