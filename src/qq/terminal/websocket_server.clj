@@ -63,16 +63,32 @@
   (println (str "📡 Removed mirroring client. Total clients: " (count @streaming-clients))))
 
 (defn broadcast-to-streaming-clients [message]
-  "Broadcast message to all streaming clients"
-  (doseq [client-socket @streaming-clients]
-    (try
-      (let [output-stream (.getOutputStream client-socket)
-            json-message (json/write-str message)]
-        (send-websocket-frame output-stream json-message))
-      (catch Exception e
-        (println (str "❌ Error broadcasting to client: " (.getMessage e)))
-        ;; Remove failed client
-        (remove-streaming-client client-socket)))))
+  "Broadcast message to all streaming clients with connection validation"
+  (let [valid-clients (atom [])]
+    (doseq [client-socket @streaming-clients]
+      (try
+        ;; Check if connection is still valid
+        (if (and (.isConnected client-socket) (not (.isClosed client-socket)))
+          (do
+            (let [output-stream (.getOutputStream client-socket)
+                  json-message (json/write-str message)]
+              (send-websocket-frame output-stream json-message)
+              ;; Connection successful, keep this client
+              (swap! valid-clients conj client-socket)))
+          (do
+            (println (str "🔌 Removing disconnected client from streaming list"))
+            ;; Don't add to valid clients list
+            ))
+        (catch Exception e
+          (println (str "❌ Error broadcasting to client: " (.getMessage e)))
+          (println (str "🔌 Removing failed client from streaming list"))
+          ;; Don't add to valid clients list
+          )))
+    
+    ;; Update streaming clients list with only valid connections
+    (reset! streaming-clients @valid-clients)
+    (when (not= (count @streaming-clients) (count @valid-clients))
+      (println (str "📡 Updated streaming clients: " (count @valid-clients) " active connections")))))
 
 (defn capture-full-tmux-history
   "Capture the entire tmux scrollback history"
