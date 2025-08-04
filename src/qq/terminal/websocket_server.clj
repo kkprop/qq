@@ -378,14 +378,15 @@
       [])))
 
 (defn get-window-content [session-name window-index]
-  "Get current content of a specific tmux window"
+  "Get current content of a specific tmux window with formatting preserved"
   (try
     (let [window-target (str session-name ":" window-index)
-          result (p/process ["tmux" "capture-pane" "-t" window-target "-p"] 
+          ;; 🎨 CAPTURE WITH ANSI ESCAPE SEQUENCES FOR FORMATTING
+          result (p/process ["tmux" "capture-pane" "-t" window-target "-e" "-p"] 
                            {:out :string})]
       (if (= 0 (:exit @result))
         (let [content (:out @result)]
-          (println (str "📄 Captured content from window " window-index ": " (count content) " chars"))
+          (println (str "📄 Captured content with formatting from window " window-index ": " (count content) " chars"))
           content)
         (do
           (println (str "❌ Failed to capture window content: " (:err @result)))
@@ -616,9 +617,9 @@
     ;; Create empty file
     (spit output-file "")
     
-    ;; Start tmux pipe-pane for specific window
+    ;; Start tmux pipe-pane for specific window with ANSI formatting
     (try
-      (let [result (p/process ["tmux" "pipe-pane" "-t" window-target "-O" output-file]
+      (let [result (p/process ["tmux" "pipe-pane" "-t" window-target "-e" "-O" output-file]
                              {:out :string :err :string})]
         (if (= 0 (:exit @result))
           (do
