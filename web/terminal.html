@@ -300,14 +300,19 @@
             }
         });
 
-        // Add keyboard shortcuts for copy/paste
+        // Add keyboard shortcuts for copy/paste (OS-aware)
         terminal.attachCustomKeyEventHandler((event) => {
-            // Ctrl+C for copy (when text is selected)
-            if (event.ctrlKey && event.key === 'c' && terminal.hasSelection()) {
+            // Detect OS - use Cmd on macOS, Ctrl on Windows/Linux
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const modifierKey = isMac ? event.metaKey : event.ctrlKey;
+            const keyName = isMac ? 'Cmd' : 'Ctrl';
+            
+            // Copy shortcut (Cmd+C on Mac, Ctrl+C on Windows/Linux)
+            if (modifierKey && event.key === 'c' && terminal.hasSelection()) {
                 const selection = terminal.getSelection();
                 if (selection) {
                     navigator.clipboard.writeText(selection).then(() => {
-                        console.log('📋 Copied to clipboard:', selection.length, 'characters');
+                        console.log(`📋 Copied to clipboard via ${keyName}+C:`, selection.length, 'characters');
                     }).catch(err => {
                         console.error('❌ Failed to copy to clipboard:', err);
                     });
@@ -315,11 +320,11 @@
                 return false; // Prevent default
             }
             
-            // Ctrl+V for paste
-            if (event.ctrlKey && event.key === 'v') {
+            // Paste shortcut (Cmd+V on Mac, Ctrl+V on Windows/Linux)
+            if (modifierKey && event.key === 'v') {
                 navigator.clipboard.readText().then(text => {
                     if (text) {
-                        console.log('📋 Pasting from clipboard:', text.length, 'characters');
+                        console.log(`📋 Pasting from clipboard via ${keyName}+V:`, text.length, 'characters');
                         // Add each character to input buffer
                         for (let char of text) {
                             inputBuffer += char;
