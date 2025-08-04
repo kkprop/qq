@@ -174,6 +174,11 @@
         let totalHistoryLines = 0;
         let isLoadingHistory = false;
 
+        // Smart duplicate detection and elimination
+        let lastSentCommand = '';
+        let lastSentTimestamp = 0;
+        let duplicateDetectionWindow = 2000; // 2 seconds window
+        
         // Simple invisible input - let tmux handle all display
         terminal.onData(function(data) {
             try {
@@ -192,6 +197,10 @@
                 } else if (data === '\r') {
                     // Enter key - send command
                     if (invisibleInputBuffer.trim()) {
+                        // Store command for duplicate detection
+                        lastSentCommand = invisibleInputBuffer.trim();
+                        lastSentTimestamp = Date.now();
+                        
                         ws.send(JSON.stringify({
                             type: 'command',
                             content: invisibleInputBuffer.trim(),
@@ -219,6 +228,41 @@
                 console.error('Error in input handler:', error);
             }
         });
+
+        // Smart duplicate detection function
+        function isDuplicateCommand(content) {
+            const now = Date.now();
+            const timeSinceLastSent = now - lastSentTimestamp;
+            
+            // Check if this content matches our last sent command within the detection window
+            if (timeSinceLastSent < duplicateDetectionWindow && 
+                content.trim() === lastSentCommand) {
+                console.log('🔍 Duplicate detected:', content.trim());
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Enhanced content filtering
+        function shouldDisplayContent(content) {
+            // Skip empty content
+            if (!content || content.trim() === '') {
+                return false;
+            }
+            
+            // Skip duplicate commands
+            if (isDuplicateCommand(content)) {
+                return false;
+            }
+            
+            // Skip common prompt patterns that might be duplicated
+            if (content.match(/^\s*\$\s*$/) || content.match(/^\s*>\s*$/)) {
+                return false;
+            }
+            
+            return true;
+        }
 
         // WebSocket connection management
         function connectWebSocket() {
@@ -274,8 +318,8 @@
                                 break;
                                 
                             case 'tmux-realtime':
-                                // Handle real-time tmux updates
-                                if (data.content) {
+                                // Handle real-time tmux updates with smart duplicate detection
+                                if (data.content && shouldDisplayContent(data.content)) {
                                     // Add new content to buffer
                                     const newLines = data.content.split('\n').filter(line => line.trim() !== '');
                                     if (newLines.length > 0) {
@@ -301,6 +345,8 @@
                                             }
                                         }, 50);
                                     }
+                                } else {
+                                    console.log('🔍 Filtered duplicate content:', data.content?.substring(0, 50) + '...');
                                 }
                                 break;
                                 
