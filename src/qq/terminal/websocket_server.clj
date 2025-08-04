@@ -259,6 +259,27 @@
     (catch Exception e
       (println (str "❌ Error checking pipe-pane: " (.getMessage e))))))
 
+;; Command echo filtering state
+(def last-sent-commands (atom {})) ; session-name -> {:command "..." :timestamp 123}
+
+(defn should-filter-command-echo? [session-name content]
+  "Check if content is a command echo that should be filtered"
+  (when-let [last-cmd (get @last-sent-commands session-name)]
+    (let [time-since-sent (- (System/currentTimeMillis) (:timestamp last-cmd))
+          command-text (:command last-cmd)]
+      ;; Filter if content matches last command within 2 seconds
+      (and (< time-since-sent 2000)
+           (or (= content command-text)
+               (= content (str "$ " command-text))
+               (= content (str "> " command-text))
+               (.contains content command-text))))))
+
+(defn record-sent-command [session-name command]
+  "Record a command that was sent to track for echo filtering"
+  (swap! last-sent-commands assoc session-name 
+         {:command command :timestamp (System/currentTimeMillis)})
+  (println (str "📝 Recorded command for echo filtering [" session-name "]: " command)))
+
 (defn start-aggressive-file-monitoring
   "Monitor file changes for aggressive real-time mirroring with pipe-pane monitoring"
   [output-file session-name]
@@ -293,8 +314,12 @@
                                  :content cleaned-content
                                  :session session-name
                                  :timestamp (System/currentTimeMillis)}]
-                    (println (str "📡 Aggressive mirror: " (subs cleaned-content 0 (min 80 (count cleaned-content))) "..."))
-                    (broadcast-to-streaming-clients message))))
+                    ;; Filter command echoes before broadcasting
+                    (if (should-filter-command-echo? session-name cleaned-content)
+                      (println (str "🔍 Filtered command echo: " (subs cleaned-content 0 (min 50 (count cleaned-content))) "..."))
+                      (do
+                        (println (str "📡 Aggressive mirror: " (subs cleaned-content 0 (min 80 (count cleaned-content))) "..."))
+                        (broadcast-to-streaming-clients message))))))
               (recur)))))
       
       (catch Exception e
@@ -668,10 +693,14 @@
       
       (case (:type parsed)
         "command"
-        (let [result (process-qa-command command session-id)]
-          (if (:success result)
-            {:type "output" :content (:output result) :success true}
-            {:type "error" :content (:error result) :success false}))
+        (do
+          ;; Record command for echo filtering
+          (record-sent-command session-id command)
+          
+          (let [result (process-qa-command command session-id)]
+            (if (:success result)
+              {:type "output" :content (:output result) :success true}
+              {:type "error" :content (:error result) :success false})))
         
         "ping"
         {:type "pong" :content "Server alive"}
