@@ -1001,16 +1001,13 @@
 
         // Enhanced shell-like input handling with full keyboard shortcuts
         
-        // 🔧 SIMPLIFIED MULTI-LINE INPUT SYSTEM - FIX CURSOR POSITIONING
+        // 🔧 IMPROVED MULTI-LINE INPUT SYSTEM WITH PROPER CURSOR POSITIONING
         
         function updateDisplay() {
-            // 🚨 SIMPLE APPROACH: Clear and redraw everything, cursor at end
             const lines = inputBuffer.split('\n');
             
-            // Clear current line
+            // Clear current line and any previous multi-lines
             terminal.write('\r\x1b[2K');
-            
-            // If we had multiple lines before, clear them
             if (lines.length > 1) {
                 for (let i = 1; i < lines.length; i++) {
                     terminal.write('\x1b[1A\x1b[2K'); // Move up and clear
@@ -1028,9 +1025,29 @@
                 terminal.write('\r\n  ' + lines[i]);
             }
             
-            // 🎯 SIMPLIFIED CURSOR POSITIONING
-            // For now, keep cursor at the end to avoid positioning bugs
-            // This gives stable behavior while we can add more sophisticated positioning later
+            // 🎯 PROPER CURSOR POSITIONING
+            if (cursorPosition <= inputBuffer.length) {
+                const beforeCursor = inputBuffer.slice(0, cursorPosition);
+                const beforeCursorLines = beforeCursor.split('\n');
+                const currentLineIndex = beforeCursorLines.length - 1;
+                const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
+                
+                // Move cursor to correct position
+                if (currentLineIndex > 0) {
+                    // Move up to first line, then down to correct line
+                    terminal.write('\x1b[' + (lines.length - 1) + 'A'); // Move to first line
+                    for (let i = 0; i < currentLineIndex; i++) {
+                        terminal.write('\x1b[1B'); // Move down
+                    }
+                    // Position within line (account for indentation)
+                    const prefix = currentLineIndex === 0 ? '$ ' : '  ';
+                    terminal.write('\r\x1b[' + (prefix.length + positionInCurrentLine) + 'C');
+                } else {
+                    // First line - position after prompt
+                    terminal.write('\x1b[' + (lines.length - 1) + 'A'); // Move to first line
+                    terminal.write('\r\x1b[' + (2 + positionInCurrentLine) + 'C'); // 2 for "$ "
+                }
+            }
         }
 
         function moveCursorLeft() {
@@ -1040,10 +1057,71 @@
             }
         }
 
-        function moveCursorRight() {
-            if (cursorPosition < inputBuffer.length) {
-                cursorPosition++;
-                terminal.write('\x1b[C'); // Standard cursor right
+        function moveCursorUp() {
+            // 🔧 MULTI-LINE UP ARROW NAVIGATION
+            if (inputBuffer.includes('\n')) {
+                const beforeCursor = inputBuffer.slice(0, cursorPosition);
+                const lines = inputBuffer.split('\n');
+                const beforeCursorLines = beforeCursor.split('\n');
+                
+                const currentLineIndex = beforeCursorLines.length - 1;
+                const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
+                
+                if (currentLineIndex > 0) {
+                    // Move to previous line
+                    const previousLine = lines[currentLineIndex - 1];
+                    const newPositionInPreviousLine = Math.min(positionInCurrentLine, previousLine.length);
+                    
+                    // Calculate new cursor position
+                    let newCursorPosition = 0;
+                    for (let i = 0; i < currentLineIndex - 1; i++) {
+                        newCursorPosition += lines[i].length + 1; // +1 for newline
+                    }
+                    newCursorPosition += newPositionInPreviousLine;
+                    
+                    cursorPosition = newCursorPosition;
+                    updateDisplay();
+                } else {
+                    // Already on first line, use history
+                    previousHistory();
+                }
+            } else {
+                // Single line, use history
+                previousHistory();
+            }
+        }
+
+        function moveCursorDown() {
+            // 🔧 MULTI-LINE DOWN ARROW NAVIGATION
+            if (inputBuffer.includes('\n')) {
+                const beforeCursor = inputBuffer.slice(0, cursorPosition);
+                const lines = inputBuffer.split('\n');
+                const beforeCursorLines = beforeCursor.split('\n');
+                
+                const currentLineIndex = beforeCursorLines.length - 1;
+                const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
+                
+                if (currentLineIndex < lines.length - 1) {
+                    // Move to next line
+                    const nextLine = lines[currentLineIndex + 1];
+                    const newPositionInNextLine = Math.min(positionInCurrentLine, nextLine.length);
+                    
+                    // Calculate new cursor position
+                    let newCursorPosition = 0;
+                    for (let i = 0; i <= currentLineIndex; i++) {
+                        newCursorPosition += lines[i].length + 1; // +1 for newline
+                    }
+                    newCursorPosition += newPositionInNextLine;
+                    
+                    cursorPosition = newCursorPosition;
+                    updateDisplay();
+                } else {
+                    // Already on last line, use history
+                    nextHistory();
+                }
+            } else {
+                // Single line, use history
+                nextHistory();
             }
         }
 
@@ -1051,6 +1129,20 @@
             inputBuffer = inputBuffer.slice(0, cursorPosition) + char + inputBuffer.slice(cursorPosition);
             cursorPosition++;
             updateDisplay();
+        }
+
+        function moveCursorRight() {
+            if (cursorPosition < inputBuffer.length) {
+                cursorPosition++;
+                updateDisplay(); // Use updateDisplay for consistency
+            }
+        }
+
+        function moveCursorLeft() {
+            if (cursorPosition > 0) {
+                cursorPosition--;
+                updateDisplay(); // Use updateDisplay for consistency
+            }
         }
 
         function deleteChar() {
@@ -1131,11 +1223,11 @@
                 
                 // Handle special key sequences with validation
                 if (data === '\x1b[A') {
-                    // Up arrow - previous command in history
-                    previousHistory();
+                    // Up arrow - multi-line navigation or history
+                    moveCursorUp();
                 } else if (data === '\x1b[B') {
-                    // Down arrow - next command in history
-                    nextHistory();
+                    // Down arrow - multi-line navigation or history
+                    moveCursorDown();
                 } else if (data === '\x1b[C') {
                     // Right arrow - move cursor right
                     moveCursorRight();
