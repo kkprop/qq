@@ -326,12 +326,15 @@
                     if (text) {
                         console.log(`📋 Pasting from clipboard via ${keyName}+V:`, text.length, 'characters');
                         
-                        // 🔧 PROPER PASTE INTEGRATION WITH CURSOR POSITION
-                        // Insert text at current cursor position
-                        inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
+                        // 🔧 HANDLE NEWLINES IN PASTED TEXT
+                        // Convert newlines to spaces to prevent display issues
+                        const cleanText = text.replace(/\r?\n/g, ' ');
+                        
+                        // Insert cleaned text at current cursor position
+                        inputBuffer = inputBuffer.slice(0, cursorPosition) + cleanText + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
-                        cursorPosition += text.length;
+                        cursorPosition += cleanText.length;
                         
                         // Update the display properly
                         updateDisplay();
@@ -401,12 +404,15 @@
                     if (text) {
                         console.log('📋 Pasting via context menu:', text.length, 'characters');
                         
-                        // 🔧 PROPER PASTE INTEGRATION WITH CURSOR POSITION
-                        // Insert text at current cursor position
-                        inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
+                        // 🔧 HANDLE NEWLINES IN PASTED TEXT
+                        // Convert newlines to spaces to prevent display issues
+                        const cleanText = text.replace(/\r?\n/g, ' ');
+                        
+                        // Insert cleaned text at current cursor position
+                        inputBuffer = inputBuffer.slice(0, cursorPosition) + cleanText + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
-                        cursorPosition += text.length;
+                        cursorPosition += cleanText.length;
                         
                         // Update the display properly
                         updateDisplay();
