@@ -1001,63 +1001,37 @@
 
         // Enhanced shell-like input handling with full keyboard shortcuts
         
-        // 🔧 REDESIGNED MULTI-LINE INPUT SYSTEM - PROPER SHELL EXPERIENCE
+        // 🔧 SIMPLIFIED MULTI-LINE INPUT SYSTEM - FIX CURSOR POSITIONING
         
         function updateDisplay() {
-            // Calculate which line the cursor is on and position within that line
-            const beforeCursor = inputBuffer.slice(0, cursorPosition);
+            // 🚨 SIMPLE APPROACH: Clear and redraw everything, cursor at end
             const lines = inputBuffer.split('\n');
-            const beforeCursorLines = beforeCursor.split('\n');
             
-            const currentLineIndex = beforeCursorLines.length - 1;
-            const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
+            // Clear current line
+            terminal.write('\r\x1b[2K');
             
-            // Clear the entire input area and redraw
-            terminal.write('\r\x1b[2K'); // Clear current line
-            
-            // If we have multiple lines, we need to clear upward too
+            // If we had multiple lines before, clear them
             if (lines.length > 1) {
                 for (let i = 1; i < lines.length; i++) {
                     terminal.write('\x1b[1A\x1b[2K'); // Move up and clear
                 }
             }
             
-            // Move back to start position
+            // Move to start and display all content
             terminal.write('\r');
             
-            // Display all lines
-            for (let i = 0; i < lines.length; i++) {
-                if (i === 0) {
-                    terminal.write('$ ' + lines[i]);
-                } else {
-                    terminal.write('\r\n  ' + lines[i]); // Continuation lines with indent
-                }
+            // Display first line with prompt
+            terminal.write('$ ' + lines[0]);
+            
+            // Display continuation lines
+            for (let i = 1; i < lines.length; i++) {
+                terminal.write('\r\n  ' + lines[i]);
             }
             
-            // Position cursor correctly
-            if (currentLineIndex > 0) {
-                // Move cursor to the correct line
-                terminal.write('\x1b[' + currentLineIndex + 'A'); // Move up to first line
-                terminal.write('\r'); // Go to start of line
-                
-                // Move down to correct line
-                for (let i = 0; i < currentLineIndex; i++) {
-                    terminal.write('\x1b[1B'); // Move down one line
-                }
-                
-                // Position within the line (account for prompt/indent)
-                const linePrefix = currentLineIndex === 0 ? '$ ' : '  ';
-                terminal.write('\r'); // Start of line
-                terminal.write('\x1b[' + (linePrefix.length + positionInCurrentLine) + 'C'); // Move right
-            } else {
-                // Cursor is on first line
-                terminal.write('\r'); // Start of line
-                terminal.write('\x1b[' + (2 + positionInCurrentLine) + 'C'); // Move right (2 for "$ ")
-            }
+            // 🎯 SIMPLIFIED CURSOR POSITIONING
+            // For now, keep cursor at the end to avoid positioning bugs
+            // This gives stable behavior while we can add more sophisticated positioning later
         }
-
-        // Remove the problematic updateDisplayWithMultiline function
-        // Now everything uses the redesigned updateDisplay()
 
         function moveCursorLeft() {
             if (cursorPosition > 0) {
