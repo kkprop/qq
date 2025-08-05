@@ -157,67 +157,88 @@
             position: absolute;
             top: 40px;
             left: 0;
-            right: 0;
+            right: 400px; /* Leave space for editors on right */
             bottom: 0;
             padding: 8px;
             /* Enable scrollbar */
             overflow-y: auto;
             overflow-x: hidden;
-            /* Change to flex layout for CodeMirror */
+        }
+        
+        #terminal {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Right Side Editors Panel */
+        .editors-panel {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            width: 400px;
+            bottom: 0;
+            background: #1e1e1e;
+            border-left: 2px solid #333;
             display: flex;
             flex-direction: column;
         }
         
-        #terminal {
+        /* Individual Editor Containers */
+        .editor-container {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #333;
             min-height: 0; /* Allow shrinking */
         }
         
-        /* CodeMirror Input Area */
-        .input-area {
-            display: flex;
-            align-items: flex-start;
-            background: #1e1e1e;
-            border-top: 1px solid #333;
-            padding: 8px;
-            min-height: 40px;
-            flex-shrink: 0; /* Don't shrink */
+        .editor-container:last-child {
+            border-bottom: none;
         }
         
-        .input-prompt {
+        .editor-header {
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 8px 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+        
+        .editor-content {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            padding: 8px;
+            min-height: 0;
+        }
+        
+        .editor-prompt {
             color: #00ff00;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 14px;
             line-height: 20px;
             margin-right: 8px;
             margin-top: 2px;
+            flex-shrink: 0;
         }
         
-        .codemirror-container {
+        .editor-textarea {
             flex: 1;
-            min-height: 20px;
-        }
-        
-        /* CodeMirror Styling */
-        .cm-editor {
-            background: transparent !important;
-            color: #ffffff !important;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
-            font-size: 14px !important;
-            line-height: 20px !important;
-        }
-        
-        .cm-focused {
-            outline: none !important;
-        }
-        
-        .cm-content {
-            padding: 0 !important;
-            min-height: 20px !important;
-        }
-        
-        .cm-line {
-            padding: 0 !important;
+            min-height: 80px;
+            background: transparent;
+            color: #ffffff;
+            border: none;
+            outline: none;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 20px;
+            resize: none; /* Disable resize since we have flex layout */
+            padding: 4px;
+            margin: 0;
+            overflow-y: auto;
         }
         
         /* Custom scrollbar styling */
@@ -293,11 +314,35 @@
         
         <div class="terminal-wrapper">
             <div id="terminal"></div>
+        </div>
+        
+        <!-- Right Side Editors Panel -->
+        <div class="editors-panel">
+            <!-- Editor 1: Main Command -->
+            <div class="editor-container">
+                <div class="editor-header">📝 Main Command</div>
+                <div class="editor-content">
+                    <div class="editor-prompt">$ </div>
+                    <textarea id="editor-main" class="editor-textarea" placeholder="Type your main command here..."></textarea>
+                </div>
+            </div>
             
-            <!-- CodeMirror Input Area -->
-            <div class="input-area">
-                <div class="input-prompt">$ </div>
-                <div id="codemirror-input" class="codemirror-container"></div>
+            <!-- Editor 2: Follow-up Query -->
+            <div class="editor-container">
+                <div class="editor-header">🔄 Follow-up Query</div>
+                <div class="editor-content">
+                    <div class="editor-prompt">$ </div>
+                    <textarea id="editor-followup" class="editor-textarea" placeholder="Type follow-up questions here..."></textarea>
+                </div>
+            </div>
+            
+            <!-- Editor 3: Notes/Scratch -->
+            <div class="editor-container">
+                <div class="editor-header">📋 Notes & Scratch</div>
+                <div class="editor-content">
+                    <div class="editor-prompt"># </div>
+                    <textarea id="editor-notes" class="editor-textarea" placeholder="Take notes or draft ideas here..."></textarea>
+                </div>
             </div>
         </div>
     </div>
@@ -365,77 +410,100 @@
         terminal.open(document.getElementById('terminal'));
         fitAddon.fit();
 
-        // 🚀 CODEMIRROR 6 INTEGRATION
-        let codeMirrorEditor = null;
+        // 🚀 THREE EDITOR SYSTEM
+        let editors = {
+            main: null,
+            followup: null,
+            notes: null
+        };
+        let currentActiveEditor = 'main';
         let currentInput = '';
         
-        // Initialize simple textarea editor immediately
+        // Initialize 3 editors immediately
         function initializeCodeMirror() {
-            console.log('🚀 Initializing simple multi-line textarea...');
+            console.log('🚀 Initializing 3-editor system...');
             
-            const container = document.getElementById('codemirror-input');
+            // Initialize Main Command Editor
+            const mainEditor = document.getElementById('editor-main');
+            setupEditor(mainEditor, 'main', 'Main command editor');
             
-            // Create a textarea for multi-line input
-            const textarea = document.createElement('textarea');
-            textarea.placeholder = 'Type your multi-line command here...';
-            textarea.style.cssText = `
-                width: 100%;
-                min-height: 60px;
-                max-height: 300px;
-                background: transparent;
-                color: #ffffff;
-                border: none;
-                outline: none;
-                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                font-size: 14px;
-                line-height: 20px;
-                resize: vertical;
-                padding: 4px;
-                margin: 0;
-                overflow-y: auto;
-            `;
+            // Initialize Follow-up Query Editor
+            const followupEditor = document.getElementById('editor-followup');
+            setupEditor(followupEditor, 'followup', 'Follow-up query editor');
             
+            // Initialize Notes/Scratch Editor
+            const notesEditor = document.getElementById('editor-notes');
+            setupEditor(notesEditor, 'notes', 'Notes and scratch editor');
+            
+            // Focus the main editor by default
+            mainEditor.focus();
+            
+            console.log('✅ 3-editor system initialized!');
+        }
+        
+        function setupEditor(textarea, editorType, description) {
+            // Set up event handlers
             textarea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
+                    currentActiveEditor = editorType;
+                    currentInput = textarea.value;
                     executeCommand();
                 } else if (e.key === 'c' && e.ctrlKey) {
                     e.preventDefault();
                     textarea.value = '';
-                    currentInput = '';
-                    terminal.write('^C\r\n$ ');
+                    terminal.write(`^C (${description})\r\n$ `);
                 }
             });
             
             textarea.addEventListener('input', () => {
-                currentInput = textarea.value;
+                if (document.activeElement === textarea) {
+                    currentActiveEditor = editorType;
+                    currentInput = textarea.value;
+                }
             });
             
-            container.appendChild(textarea);
-            codeMirrorEditor = { 
+            textarea.addEventListener('focus', () => {
+                currentActiveEditor = editorType;
+                currentInput = textarea.value;
+                console.log(`📝 Switched to ${description}`);
+            });
+            
+            // Store reference
+            editors[editorType] = {
+                element: textarea,
                 focus: () => textarea.focus(),
                 getValue: () => textarea.value,
                 setValue: (value) => { 
                     textarea.value = value; 
-                    currentInput = value; 
+                    if (document.activeElement === textarea) {
+                        currentInput = value;
+                    }
+                },
+                clear: () => {
+                    textarea.value = '';
+                    if (document.activeElement === textarea) {
+                        currentInput = '';
+                    }
                 }
             };
-            
-            // Focus the textarea
-            textarea.focus();
-            
-            console.log('✅ Simple multi-line textarea initialized!');
         }
         
-        // Execute command from editor
+        // Execute command from active editor
         function executeCommand() {
             const command = currentInput.trim();
             if (!command) return;
             
-            console.log('📤 Executing command:', command);
+            const editorNames = {
+                main: 'Main Command',
+                followup: 'Follow-up Query', 
+                notes: 'Notes & Scratch'
+            };
             
-            // Add to terminal display
-            terminal.write('\r\n');
+            console.log(`📤 Executing from ${editorNames[currentActiveEditor]}:`, command);
+            
+            // Add to terminal display with editor context
+            terminal.write(`\r\n[${editorNames[currentActiveEditor]}] $ ${command}\r\n`);
             
             // Send command via WebSocket
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -443,13 +511,14 @@
                     type: 'command',
                     content: command,
                     session: currentSessionId,
-                    currentWindow: currentWindowIndex || 2
+                    currentWindow: currentWindowIndex || 2,
+                    editor: currentActiveEditor
                 }));
             }
             
-            // Clear the editor
-            if (codeMirrorEditor && codeMirrorEditor.setValue) {
-                codeMirrorEditor.setValue('');
+            // Clear the active editor
+            if (editors[currentActiveEditor]) {
+                editors[currentActiveEditor].clear();
             }
             currentInput = '';
         }
