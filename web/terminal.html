@@ -614,38 +614,7 @@
             }
             currentInput = '';
         }
-            const command = currentInput.trim();
-            if (!command) return;
-            
-            const editorNames = {
-                main: 'Main Command',
-                followup: 'Follow-up Query', 
-                notes: 'Notes & Scratch'
-            };
-            
-            console.log(`📤 Executing from ${editorNames[currentActiveEditor]}:`, command);
-            
-            // Add to terminal display with editor context
-            terminal.write(`\r\n[${editorNames[currentActiveEditor]}] $ ${command}\r\n`);
-            
-            // Send command via WebSocket
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'command',
-                    content: command,
-                    session: currentSessionId,
-                    currentWindow: currentWindowIndex || 2,
-                    editor: currentActiveEditor
-                }));
-            }
-            
-            // Clear the active editor
-            if (editors[currentActiveEditor]) {
-                editors[currentActiveEditor].clear();
-            }
-            currentInput = '';
-        }
-        
+
         // Initialize immediately - no waiting needed
         initializeCodeMirror();
 
