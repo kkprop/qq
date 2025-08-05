@@ -326,18 +326,15 @@
                     if (text) {
                         console.log(`📋 Pasting from clipboard via ${keyName}+V:`, text.length, 'characters');
                         
-                        // 🔧 SMART NEWLINE HANDLING
-                        // Preserve newlines in the actual content but handle display properly
-                        
-                        // Insert text at current cursor position (keep original newlines)
+                        // 🔧 PROPER MULTI-LINE PASTE WITH UNIFIED DISPLAY
+                        // Insert text at current cursor position (preserve newlines)
                         inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
                         cursorPosition += text.length;
                         
-                        // 🎯 SMART DISPLAY UPDATE
-                        // For display purposes, show a preview but handle multi-line properly
-                        updateDisplayWithMultiline();
+                        // Use unified display system
+                        updateDisplay();
                     }
                 }).catch(err => {
                     console.error('❌ Failed to paste from clipboard:', err);
@@ -404,17 +401,15 @@
                     if (text) {
                         console.log('📋 Pasting via context menu:', text.length, 'characters');
                         
-                        // 🔧 SMART NEWLINE HANDLING
-                        // Preserve newlines in the actual content but handle display properly
-                        
-                        // Insert text at current cursor position (keep original newlines)
+                        // 🔧 PROPER MULTI-LINE PASTE WITH UNIFIED DISPLAY
+                        // Insert text at current cursor position (preserve newlines)
                         inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
                         cursorPosition += text.length;
                         
-                        // 🎯 SMART DISPLAY UPDATE
-                        updateDisplayWithMultiline();
+                        // Use unified display system
+                        updateDisplay();
                     }
                 });
                 document.body.removeChild(contextMenu);
@@ -1006,38 +1001,63 @@
 
         // Enhanced shell-like input handling with full keyboard shortcuts
         
-        // Helper functions for cursor and display management
+        // 🔧 REDESIGNED MULTI-LINE INPUT SYSTEM - PROPER SHELL EXPERIENCE
+        
         function updateDisplay() {
-            // Use simple, reliable terminal operations for single-line content
-            terminal.write('\r'); // Move to beginning of line
-            terminal.write('\x1b[2K'); // Clear entire line (standard ANSI)
-            terminal.write('$ ' + inputBuffer);
+            // Calculate which line the cursor is on and position within that line
+            const beforeCursor = inputBuffer.slice(0, cursorPosition);
+            const lines = inputBuffer.split('\n');
+            const beforeCursorLines = beforeCursor.split('\n');
             
-            // Position cursor correctly using standard method
-            if (cursorPosition < inputBuffer.length) {
-                const moveBack = inputBuffer.length - cursorPosition;
-                // Use simple cursor movement
-                terminal.write('\x1b[' + moveBack + 'D');
+            const currentLineIndex = beforeCursorLines.length - 1;
+            const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
+            
+            // Clear the entire input area and redraw
+            terminal.write('\r\x1b[2K'); // Clear current line
+            
+            // If we have multiple lines, we need to clear upward too
+            if (lines.length > 1) {
+                for (let i = 1; i < lines.length; i++) {
+                    terminal.write('\x1b[1A\x1b[2K'); // Move up and clear
+                }
+            }
+            
+            // Move back to start position
+            terminal.write('\r');
+            
+            // Display all lines
+            for (let i = 0; i < lines.length; i++) {
+                if (i === 0) {
+                    terminal.write('$ ' + lines[i]);
+                } else {
+                    terminal.write('\r\n  ' + lines[i]); // Continuation lines with indent
+                }
+            }
+            
+            // Position cursor correctly
+            if (currentLineIndex > 0) {
+                // Move cursor to the correct line
+                terminal.write('\x1b[' + currentLineIndex + 'A'); // Move up to first line
+                terminal.write('\r'); // Go to start of line
+                
+                // Move down to correct line
+                for (let i = 0; i < currentLineIndex; i++) {
+                    terminal.write('\x1b[1B'); // Move down one line
+                }
+                
+                // Position within the line (account for prompt/indent)
+                const linePrefix = currentLineIndex === 0 ? '$ ' : '  ';
+                terminal.write('\r'); // Start of line
+                terminal.write('\x1b[' + (linePrefix.length + positionInCurrentLine) + 'C'); // Move right
+            } else {
+                // Cursor is on first line
+                terminal.write('\r'); // Start of line
+                terminal.write('\x1b[' + (2 + positionInCurrentLine) + 'C'); // Move right (2 for "$ ")
             }
         }
 
-        function updateDisplayWithMultiline() {
-            // 🔧 SIMPLIFIED MULTI-LINE DISPLAY - AVOID REPETITION ISSUES
-            if (inputBuffer.includes('\n')) {
-                // Show multi-line content on a single line with visible newline indicators
-                const displayText = inputBuffer.replace(/\n/g, ' ↵ ');
-                
-                // Use standard single-line display with newline indicators
-                terminal.write('\r');
-                terminal.write('\x1b[2K'); // Clear current line
-                terminal.write('$ ' + displayText);
-                
-                // Position cursor at end (simplified for multi-line)
-            } else {
-                // Single-line content - use normal display
-                updateDisplay();
-            }
-        }
+        // Remove the problematic updateDisplayWithMultiline function
+        // Now everything uses the redesigned updateDisplay()
 
         function moveCursorLeft() {
             if (cursorPosition > 0) {
@@ -1063,12 +1083,8 @@
             if (cursorPosition > 0) {
                 inputBuffer = inputBuffer.slice(0, cursorPosition - 1) + inputBuffer.slice(cursorPosition);
                 cursorPosition--;
-                // 🔧 USE SMART DISPLAY FOR MULTI-LINE CONTENT
-                if (inputBuffer.includes('\n')) {
-                    updateDisplayWithMultiline();
-                } else {
-                    updateDisplay();
-                }
+                // Use unified display system for all content
+                updateDisplay();
             }
         }
 
