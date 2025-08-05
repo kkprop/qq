@@ -307,19 +307,13 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
     
-    <!-- CodeMirror 6 JavaScript -->
-    <script type="module">
-        // Import CodeMirror 6 modules
-        import { EditorView, basicSetup } from 'https://cdn.jsdelivr.net/npm/codemirror@6.0.1/dist/index.js';
-        import { oneDark } from 'https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/dist/index.js';
-        import { keymap } from 'https://cdn.jsdelivr.net/npm/@codemirror/view@6.21.3/dist/index.js';
-        
-        // Make CodeMirror available globally
-        window.CodeMirror = { EditorView, basicSetup, oneDark, keymap };
-        
-        // Signal that CodeMirror is loaded
+    <!-- CodeMirror 6 Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/dist/index.js"></script>
+    <script>
+        // Simple CodeMirror initialization
         window.codeMirrorLoaded = true;
         window.dispatchEvent(new Event('codemirror-loaded'));
+        console.log('✅ CodeMirror 6 bundle loaded!');
     </script>
 
     <script>
@@ -378,7 +372,7 @@
         
         // Initialize CodeMirror when loaded
         function initializeCodeMirror() {
-            if (!window.CodeMirror) {
+            if (!window.CM) {
                 console.log('⏳ Waiting for CodeMirror to load...');
                 setTimeout(initializeCodeMirror, 100);
                 return;
@@ -386,50 +380,55 @@
             
             console.log('🚀 Initializing CodeMirror 6...');
             
-            const { EditorView, basicSetup, oneDark, keymap } = window.CodeMirror;
+            // Create a simple textarea-based approach first
+            const container = document.getElementById('codemirror-input');
             
-            // Create CodeMirror editor
-            codeMirrorEditor = new EditorView({
-                doc: '',
-                extensions: [
-                    basicSetup,
-                    oneDark,
-                    keymap.of([
-                        {
-                            key: 'Enter',
-                            run: () => {
-                                executeCommand();
-                                return true;
-                            }
-                        },
-                        {
-                            key: 'Ctrl-c',
-                            run: () => {
-                                // Handle Ctrl+C
-                                terminal.write('^C\r\n$ ');
-                                codeMirrorEditor.dispatch({
-                                    changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: '' }
-                                });
-                                return true;
-                            }
-                        }
-                    ]),
-                    EditorView.updateListener.of((update) => {
-                        if (update.docChanged) {
-                            currentInput = codeMirrorEditor.state.doc.toString();
-                        }
-                    })
-                ],
-                parent: document.getElementById('codemirror-input')
+            // Create a textarea for now as fallback
+            const textarea = document.createElement('textarea');
+            textarea.style.cssText = `
+                width: 100%;
+                min-height: 20px;
+                background: transparent;
+                color: #ffffff;
+                border: none;
+                outline: none;
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                font-size: 14px;
+                line-height: 20px;
+                resize: vertical;
+                padding: 0;
+                margin: 0;
+            `;
+            
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    executeCommand();
+                } else if (e.key === 'c' && e.ctrlKey) {
+                    e.preventDefault();
+                    textarea.value = '';
+                    terminal.write('^C\r\n$ ');
+                }
             });
             
-            // Focus the editor
-            codeMirrorEditor.focus();
+            textarea.addEventListener('input', () => {
+                currentInput = textarea.value;
+            });
             
-            console.log('✅ CodeMirror 6 initialized successfully!');
+            container.appendChild(textarea);
+            codeMirrorEditor = { 
+                focus: () => textarea.focus(),
+                getValue: () => textarea.value,
+                setValue: (value) => { textarea.value = value; currentInput = value; }
+            };
+            
+            // Focus the textarea
+            textarea.focus();
+            
+            console.log('✅ Simple textarea editor initialized!');
         }
         
-        // Execute command from CodeMirror
+        // Execute command from editor
         function executeCommand() {
             const command = currentInput.trim();
             if (!command) return;
@@ -450,9 +449,9 @@
             }
             
             // Clear the editor
-            codeMirrorEditor.dispatch({
-                changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: '' }
-            });
+            if (codeMirrorEditor && codeMirrorEditor.setValue) {
+                codeMirrorEditor.setValue('');
+            }
             currentInput = '';
         }
         
