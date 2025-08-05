@@ -8,6 +8,11 @@
     <!-- xterm.js CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     
+    <!-- CodeMirror 6 CSS -->
+    <style>
+        @import url('https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/dist/index.css');
+    </style>
+    
     <style>
         body {
             margin: 0;
@@ -158,6 +163,61 @@
             /* Enable scrollbar */
             overflow-y: auto;
             overflow-x: hidden;
+            /* Change to flex layout for CodeMirror */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #terminal {
+            flex: 1;
+            min-height: 0; /* Allow shrinking */
+        }
+        
+        /* CodeMirror Input Area */
+        .input-area {
+            display: flex;
+            align-items: flex-start;
+            background: #1e1e1e;
+            border-top: 1px solid #333;
+            padding: 8px;
+            min-height: 40px;
+            flex-shrink: 0; /* Don't shrink */
+        }
+        
+        .input-prompt {
+            color: #00ff00;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 20px;
+            margin-right: 8px;
+            margin-top: 2px;
+        }
+        
+        .codemirror-container {
+            flex: 1;
+            min-height: 20px;
+        }
+        
+        /* CodeMirror Styling */
+        .cm-editor {
+            background: transparent !important;
+            color: #ffffff !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            font-size: 14px !important;
+            line-height: 20px !important;
+        }
+        
+        .cm-focused {
+            outline: none !important;
+        }
+        
+        .cm-content {
+            padding: 0 !important;
+            min-height: 20px !important;
+        }
+        
+        .cm-line {
+            padding: 0 !important;
         }
         
         /* Custom scrollbar styling */
@@ -233,6 +293,12 @@
         
         <div class="terminal-wrapper">
             <div id="terminal"></div>
+            
+            <!-- CodeMirror Input Area -->
+            <div class="input-area">
+                <div class="input-prompt">$ </div>
+                <div id="codemirror-input" class="codemirror-container"></div>
+            </div>
         </div>
     </div>
 
@@ -240,6 +306,21 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+    
+    <!-- CodeMirror 6 JavaScript -->
+    <script type="module">
+        // Import CodeMirror 6 modules
+        import { EditorView, basicSetup } from 'https://cdn.jsdelivr.net/npm/codemirror@6.0.1/dist/index.js';
+        import { oneDark } from 'https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/dist/index.js';
+        import { keymap } from 'https://cdn.jsdelivr.net/npm/@codemirror/view@6.21.3/dist/index.js';
+        
+        // Make CodeMirror available globally
+        window.CodeMirror = { EditorView, basicSetup, oneDark, keymap };
+        
+        // Signal that CodeMirror is loaded
+        window.codeMirrorLoaded = true;
+        window.dispatchEvent(new Event('codemirror-loaded'));
+    </script>
 
     <script>
         // Terminal setup
@@ -290,6 +371,93 @@
         // Mount terminal
         terminal.open(document.getElementById('terminal'));
         fitAddon.fit();
+
+        // 🚀 CODEMIRROR 6 INTEGRATION
+        let codeMirrorEditor = null;
+        let currentInput = '';
+        
+        // Initialize CodeMirror when loaded
+        function initializeCodeMirror() {
+            if (!window.CodeMirror) {
+                console.log('⏳ Waiting for CodeMirror to load...');
+                setTimeout(initializeCodeMirror, 100);
+                return;
+            }
+            
+            console.log('🚀 Initializing CodeMirror 6...');
+            
+            const { EditorView, basicSetup, oneDark, keymap } = window.CodeMirror;
+            
+            // Create CodeMirror editor
+            codeMirrorEditor = new EditorView({
+                doc: '',
+                extensions: [
+                    basicSetup,
+                    oneDark,
+                    keymap.of([
+                        {
+                            key: 'Enter',
+                            run: () => {
+                                executeCommand();
+                                return true;
+                            }
+                        },
+                        {
+                            key: 'Ctrl-c',
+                            run: () => {
+                                // Handle Ctrl+C
+                                terminal.write('^C\r\n$ ');
+                                codeMirrorEditor.dispatch({
+                                    changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: '' }
+                                });
+                                return true;
+                            }
+                        }
+                    ]),
+                    EditorView.updateListener.of((update) => {
+                        if (update.docChanged) {
+                            currentInput = codeMirrorEditor.state.doc.toString();
+                        }
+                    })
+                ],
+                parent: document.getElementById('codemirror-input')
+            });
+            
+            // Focus the editor
+            codeMirrorEditor.focus();
+            
+            console.log('✅ CodeMirror 6 initialized successfully!');
+        }
+        
+        // Execute command from CodeMirror
+        function executeCommand() {
+            const command = currentInput.trim();
+            if (!command) return;
+            
+            console.log('📤 Executing command:', command);
+            
+            // Add to terminal display
+            terminal.write('\r\n');
+            
+            // Send command via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'command',
+                    content: command,
+                    session: currentSessionId,
+                    currentWindow: currentWindowIndex || 2
+                }));
+            }
+            
+            // Clear the editor
+            codeMirrorEditor.dispatch({
+                changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: '' }
+            });
+            currentInput = '';
+        }
+        
+        // Initialize CodeMirror
+        setTimeout(initializeCodeMirror, 500);
 
         // 📋 ADD CLIPBOARD FUNCTIONALITY AFTER TERMINAL IS MOUNTED
         // Enable text selection with mouse drag
@@ -1001,21 +1169,14 @@
 
         // Enhanced shell-like input handling with full keyboard shortcuts
         
-        // 🔧 IMPROVED MULTI-LINE INPUT SYSTEM WITH PROPER CURSOR POSITIONING
+        // 🔧 SIMPLE MULTI-LINE DISPLAY - PREVENT REPETITION BUGS
         
         function updateDisplay() {
             const lines = inputBuffer.split('\n');
             
-            // Clear current line and any previous multi-lines
+            // 🚨 ULTRA-SIMPLE APPROACH: Just show content, cursor at end
+            // Clear current line only
             terminal.write('\r\x1b[2K');
-            if (lines.length > 1) {
-                for (let i = 1; i < lines.length; i++) {
-                    terminal.write('\x1b[1A\x1b[2K'); // Move up and clear
-                }
-            }
-            
-            // Move to start and display all content
-            terminal.write('\r');
             
             // Display first line with prompt
             terminal.write('$ ' + lines[0]);
@@ -1025,29 +1186,7 @@
                 terminal.write('\r\n  ' + lines[i]);
             }
             
-            // 🎯 PROPER CURSOR POSITIONING
-            if (cursorPosition <= inputBuffer.length) {
-                const beforeCursor = inputBuffer.slice(0, cursorPosition);
-                const beforeCursorLines = beforeCursor.split('\n');
-                const currentLineIndex = beforeCursorLines.length - 1;
-                const positionInCurrentLine = beforeCursorLines[currentLineIndex].length;
-                
-                // Move cursor to correct position
-                if (currentLineIndex > 0) {
-                    // Move up to first line, then down to correct line
-                    terminal.write('\x1b[' + (lines.length - 1) + 'A'); // Move to first line
-                    for (let i = 0; i < currentLineIndex; i++) {
-                        terminal.write('\x1b[1B'); // Move down
-                    }
-                    // Position within line (account for indentation)
-                    const prefix = currentLineIndex === 0 ? '$ ' : '  ';
-                    terminal.write('\r\x1b[' + (prefix.length + positionInCurrentLine) + 'C');
-                } else {
-                    // First line - position after prompt
-                    terminal.write('\x1b[' + (lines.length - 1) + 'A'); // Move to first line
-                    terminal.write('\r\x1b[' + (2 + positionInCurrentLine) + 'C'); // 2 for "$ "
-                }
-            }
+            // Keep cursor at end - no complex positioning to avoid bugs
         }
 
         function moveCursorLeft() {
@@ -1134,14 +1273,16 @@
         function moveCursorRight() {
             if (cursorPosition < inputBuffer.length) {
                 cursorPosition++;
-                updateDisplay(); // Use updateDisplay for consistency
+                // Don't call updateDisplay() to avoid repetition - just move cursor
+                terminal.write('\x1b[C');
             }
         }
 
         function moveCursorLeft() {
             if (cursorPosition > 0) {
                 cursorPosition--;
-                updateDisplay(); // Use updateDisplay for consistency
+                // Don't call updateDisplay() to avoid repetition - just move cursor
+                terminal.write('\x1b[D');
             }
         }
 
@@ -1211,6 +1352,8 @@
             }
         }
 
+        // 🚫 OLD INPUT HANDLING DISABLED - NOW USING CODEMIRROR
+        /*
         // Enhanced terminal input handling with error prevention
         terminal.onData(function(data) {
             try {
@@ -1223,11 +1366,11 @@
                 
                 // Handle special key sequences with validation
                 if (data === '\x1b[A') {
-                    // Up arrow - multi-line navigation or history
-                    moveCursorUp();
+                    // Up arrow - use history only (disable multi-line nav to prevent bugs)
+                    previousHistory();
                 } else if (data === '\x1b[B') {
-                    // Down arrow - multi-line navigation or history
-                    moveCursorDown();
+                    // Down arrow - use history only (disable multi-line nav to prevent bugs)
+                    nextHistory();
                 } else if (data === '\x1b[C') {
                     // Right arrow - move cursor right
                     moveCursorRight();
@@ -1357,6 +1500,8 @@
                 // Don't let errors break the terminal
             }
         });
+        */
+        // 🚫 END OF DISABLED OLD INPUT HANDLING
 
         // Handle window resize
         window.addEventListener('resize', function() {
