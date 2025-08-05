@@ -326,18 +326,18 @@
                     if (text) {
                         console.log(`📋 Pasting from clipboard via ${keyName}+V:`, text.length, 'characters');
                         
-                        // 🔧 HANDLE NEWLINES IN PASTED TEXT
-                        // Convert newlines to spaces to prevent display issues
-                        const cleanText = text.replace(/\r?\n/g, ' ');
+                        // 🔧 SMART NEWLINE HANDLING
+                        // Preserve newlines in the actual content but handle display properly
                         
-                        // Insert cleaned text at current cursor position
-                        inputBuffer = inputBuffer.slice(0, cursorPosition) + cleanText + inputBuffer.slice(cursorPosition);
+                        // Insert text at current cursor position (keep original newlines)
+                        inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
-                        cursorPosition += cleanText.length;
+                        cursorPosition += text.length;
                         
-                        // Update the display properly
-                        updateDisplay();
+                        // 🎯 SMART DISPLAY UPDATE
+                        // For display purposes, show a preview but handle multi-line properly
+                        updateDisplayWithMultiline();
                     }
                 }).catch(err => {
                     console.error('❌ Failed to paste from clipboard:', err);
@@ -404,18 +404,17 @@
                     if (text) {
                         console.log('📋 Pasting via context menu:', text.length, 'characters');
                         
-                        // 🔧 HANDLE NEWLINES IN PASTED TEXT
-                        // Convert newlines to spaces to prevent display issues
-                        const cleanText = text.replace(/\r?\n/g, ' ');
+                        // 🔧 SMART NEWLINE HANDLING
+                        // Preserve newlines in the actual content but handle display properly
                         
-                        // Insert cleaned text at current cursor position
-                        inputBuffer = inputBuffer.slice(0, cursorPosition) + cleanText + inputBuffer.slice(cursorPosition);
+                        // Insert text at current cursor position (keep original newlines)
+                        inputBuffer = inputBuffer.slice(0, cursorPosition) + text + inputBuffer.slice(cursorPosition);
                         
                         // Update cursor position to end of pasted text
-                        cursorPosition += cleanText.length;
+                        cursorPosition += text.length;
                         
-                        // Update the display properly
-                        updateDisplay();
+                        // 🎯 SMART DISPLAY UPDATE
+                        updateDisplayWithMultiline();
                     }
                 });
                 document.body.removeChild(contextMenu);
@@ -1009,7 +1008,7 @@
         
         // Helper functions for cursor and display management
         function updateDisplay() {
-            // Use simple, reliable terminal operations
+            // Use simple, reliable terminal operations for single-line content
             terminal.write('\r'); // Move to beginning of line
             terminal.write('\x1b[2K'); // Clear entire line (standard ANSI)
             terminal.write('$ ' + inputBuffer);
@@ -1019,6 +1018,27 @@
                 const moveBack = inputBuffer.length - cursorPosition;
                 // Use simple cursor movement
                 terminal.write('\x1b[' + moveBack + 'D');
+            }
+        }
+
+        function updateDisplayWithMultiline() {
+            // 🔧 SMART MULTI-LINE DISPLAY HANDLING
+            if (inputBuffer.includes('\n')) {
+                // Multi-line content - show a preview and indicate more content
+                const lines = inputBuffer.split('\n');
+                const firstLine = lines[0];
+                const totalLines = lines.length;
+                
+                // Clear current line and show first line with indicator
+                terminal.write('\r');
+                terminal.write('\x1b[2K');
+                terminal.write('$ ' + firstLine + (totalLines > 1 ? ` ... (+${totalLines-1} lines)` : ''));
+                
+                // Position cursor at end for multi-line content
+                // (cursor positioning in multi-line is complex, so we keep it simple)
+            } else {
+                // Single-line content - use normal display
+                updateDisplay();
             }
         }
 
@@ -1046,7 +1066,12 @@
             if (cursorPosition > 0) {
                 inputBuffer = inputBuffer.slice(0, cursorPosition - 1) + inputBuffer.slice(cursorPosition);
                 cursorPosition--;
-                updateDisplay();
+                // 🔧 USE SMART DISPLAY FOR MULTI-LINE CONTENT
+                if (inputBuffer.includes('\n')) {
+                    updateDisplayWithMultiline();
+                } else {
+                    updateDisplay();
+                }
             }
         }
 
