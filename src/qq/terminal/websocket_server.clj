@@ -1078,6 +1078,56 @@
           (unsubscribe-user client-socket)
           {:type "window-unsubscribed" :success true})
         
+        ;; ⚡ INTERRUPTOR: Force interrupt and send content
+        "interruptor"
+        (let [session-name (if (= (:session parsed) "default") 
+                            "qq-default"
+                            (or (:session parsed) "qq-default"))
+              content (:content parsed)
+              editor-name (or (:editorName parsed) "Unknown Editor")
+              current-window (or (:currentWindow parsed) 2)]
+          
+          (println (str "⚡ INTERRUPTOR ACTIVATED: Force interrupting session " session-name))
+          (println (str "📤 Content from " editor-name ": " content))
+          
+          ;; Step 1: Send Ctrl+C twice to force interrupt
+          (try
+            (let [interrupt-result (p/process ["tmux" "send-keys" "-t" session-name "C-c" "C-c"]
+                                             {:out :string :err :string})]
+              (if (= 0 (:exit @interrupt-result))
+                (println "✅ Force interrupt sent (Ctrl+C Ctrl+C)")
+                (println (str "❌ Failed to send interrupt: " (:err @interrupt-result)))))
+            (catch Exception e
+              (println (str "❌ Error sending interrupt: " (.getMessage e)))))
+          
+          ;; Step 2: Brief pause to let interrupt take effect
+          (Thread/sleep 100)
+          
+          ;; Step 3: Send the editor content
+          (try
+            (let [send-result (p/process ["tmux" "send-keys" "-t" session-name content "Enter"]
+                                        {:out :string :err :string})]
+              (if (= 0 (:exit @send-result))
+                (do
+                  (println (str "✅ Content sent to tmux: " content))
+                  ;; Record for echo filtering
+                  (record-sent-command session-name content)
+                  {:type "interruptor-success"
+                   :content (str "⚡ INTERRUPTOR: Interrupted and sent content from " editor-name)
+                   :session session-name
+                   :editor (:editor parsed)
+                   :success true})
+                (do
+                  (println (str "❌ Failed to send content: " (:err @send-result)))
+                  {:type "interruptor-error"
+                   :content (str "Failed to send content: " (:err @send-result))
+                   :success false})))
+            (catch Exception e
+              (println (str "❌ Error sending content: " (.getMessage e)))
+              {:type "interruptor-error"
+               :content (str "Error sending content: " (.getMessage e))
+               :success false})))
+        
         ;; Default case
         {:type "error" :content "Unknown message type"}))
         
