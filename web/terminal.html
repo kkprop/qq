@@ -1022,25 +1022,17 @@
         }
 
         function updateDisplayWithMultiline() {
-            // 🔧 FULL MULTI-LINE DISPLAY - SHOW EVERY LINE
+            // 🔧 SIMPLIFIED MULTI-LINE DISPLAY - AVOID REPETITION ISSUES
             if (inputBuffer.includes('\n')) {
-                // Clear current display area
+                // Show multi-line content on a single line with visible newline indicators
+                const displayText = inputBuffer.replace(/\n/g, ' ↵ ');
+                
+                // Use standard single-line display with newline indicators
                 terminal.write('\r');
                 terminal.write('\x1b[2K'); // Clear current line
+                terminal.write('$ ' + displayText);
                 
-                // Split content into lines and display each one
-                const lines = inputBuffer.split('\n');
-                
-                // Show first line with prompt
-                terminal.write('$ ' + lines[0]);
-                
-                // Show additional lines without prompt (continuation)
-                for (let i = 1; i < lines.length; i++) {
-                    terminal.write('\r\n  ' + lines[i]); // Indent continuation lines
-                }
-                
-                // Position cursor at the end of the content
-                // For multi-line, we keep cursor at the end for simplicity
+                // Position cursor at end (simplified for multi-line)
             } else {
                 // Single-line content - use normal display
                 updateDisplay();
