@@ -1022,20 +1022,25 @@
         }
 
         function updateDisplayWithMultiline() {
-            // 🔧 SMART MULTI-LINE DISPLAY HANDLING
+            // 🔧 FULL MULTI-LINE DISPLAY - SHOW EVERY LINE
             if (inputBuffer.includes('\n')) {
-                // Multi-line content - show a preview and indicate more content
-                const lines = inputBuffer.split('\n');
-                const firstLine = lines[0];
-                const totalLines = lines.length;
-                
-                // Clear current line and show first line with indicator
+                // Clear current display area
                 terminal.write('\r');
-                terminal.write('\x1b[2K');
-                terminal.write('$ ' + firstLine + (totalLines > 1 ? ` ... (+${totalLines-1} lines)` : ''));
+                terminal.write('\x1b[2K'); // Clear current line
                 
-                // Position cursor at end for multi-line content
-                // (cursor positioning in multi-line is complex, so we keep it simple)
+                // Split content into lines and display each one
+                const lines = inputBuffer.split('\n');
+                
+                // Show first line with prompt
+                terminal.write('$ ' + lines[0]);
+                
+                // Show additional lines without prompt (continuation)
+                for (let i = 1; i < lines.length; i++) {
+                    terminal.write('\r\n  ' + lines[i]); // Indent continuation lines
+                }
+                
+                // Position cursor at the end of the content
+                // For multi-line, we keep cursor at the end for simplicity
             } else {
                 // Single-line content - use normal display
                 updateDisplay();
