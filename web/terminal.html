@@ -205,6 +205,34 @@
             font-weight: bold;
             border-bottom: 1px solid #333;
             flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .editor-title {
+            flex: 1;
+        }
+        
+        .interruptor-btn {
+            background: #ff4444;
+            color: #ffffff;
+            border: none;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            transition: background 0.2s;
+        }
+        
+        .interruptor-btn:hover {
+            background: #ff6666;
+        }
+        
+        .interruptor-btn:active {
+            background: #cc3333;
         }
         
         .editor-content {
@@ -320,7 +348,10 @@
         <div class="editors-panel">
             <!-- Editor 1: Main Command -->
             <div class="editor-container">
-                <div class="editor-header">📝 Main Command</div>
+                <div class="editor-header">
+                    <div class="editor-title">📝 Main Command</div>
+                    <button class="interruptor-btn" onclick="interruptAndSend('main')">⚡ INTERRUPTOR</button>
+                </div>
                 <div class="editor-content">
                     <div class="editor-prompt">$ </div>
                     <textarea id="editor-main" class="editor-textarea" placeholder="Type your main command here..."></textarea>
@@ -329,7 +360,10 @@
             
             <!-- Editor 2: Follow-up Query -->
             <div class="editor-container">
-                <div class="editor-header">🔄 Follow-up Query</div>
+                <div class="editor-header">
+                    <div class="editor-title">🔄 Follow-up Query</div>
+                    <button class="interruptor-btn" onclick="interruptAndSend('followup')">⚡ INTERRUPTOR</button>
+                </div>
                 <div class="editor-content">
                     <div class="editor-prompt">$ </div>
                     <textarea id="editor-followup" class="editor-textarea" placeholder="Type follow-up questions here..."></textarea>
@@ -338,7 +372,10 @@
             
             <!-- Editor 3: Notes/Scratch -->
             <div class="editor-container">
-                <div class="editor-header">📋 Notes & Scratch</div>
+                <div class="editor-header">
+                    <div class="editor-title">📋 Notes & Scratch</div>
+                    <button class="interruptor-btn" onclick="interruptAndSend('notes')">⚡ INTERRUPTOR</button>
+                </div>
                 <div class="editor-content">
                     <div class="editor-prompt"># </div>
                     <textarea id="editor-notes" class="editor-textarea" placeholder="Take notes or draft ideas here..."></textarea>
@@ -489,8 +526,94 @@
             };
         }
         
-        // Execute command from active editor
+        // ⚡ INTERRUPTOR SYSTEM - Force interrupt and send editor content
+        function interruptAndSend(editorType) {
+            const editor = editors[editorType];
+            if (!editor) {
+                console.error(`❌ Editor ${editorType} not found`);
+                return;
+            }
+            
+            const content = editor.getValue().trim();
+            if (!content) {
+                console.warn(`⚠️ No content in ${editorType} editor to send`);
+                return;
+            }
+            
+            const editorNames = {
+                main: 'Main Command',
+                followup: 'Follow-up Query', 
+                notes: 'Notes & Scratch'
+            };
+            
+            console.log(`⚡ INTERRUPTOR: Force interrupting and sending from ${editorNames[editorType]}`);
+            
+            // Show in terminal what we're doing
+            terminal.write(`\r\n⚡ INTERRUPTOR: Force interrupting remote tmux...\r\n`);
+            terminal.write(`📤 Sending from [${editorNames[editorType]}]:\r\n`);
+            terminal.write(`${content}\r\n`);
+            
+            // Send interrupt and content via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'interruptor',
+                    action: 'force_interrupt_and_send',
+                    content: content,
+                    session: currentSessionId,
+                    currentWindow: currentWindowIndex || 2,
+                    editor: editorType,
+                    editorName: editorNames[editorType]
+                }));
+            } else {
+                terminal.write(`❌ WebSocket not connected - cannot send to remote tmux\r\n`);
+            }
+            
+            // Optional: Clear the editor after sending
+            // editor.clear();
+        }
+        
+        // Add keyboard shortcut for Interruptor (Ctrl+Shift+Enter)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'Enter') {
+                e.preventDefault();
+                // Use the currently active editor
+                interruptAndSend(currentActiveEditor);
+            }
+        });
+        
+        // Execute command from active editor (normal Enter)
         function executeCommand() {
+            const command = currentInput.trim();
+            if (!command) return;
+            
+            const editorNames = {
+                main: 'Main Command',
+                followup: 'Follow-up Query', 
+                notes: 'Notes & Scratch'
+            };
+            
+            console.log(`📤 Executing from ${editorNames[currentActiveEditor]}:`, command);
+            
+            // Add to terminal display with editor context
+            terminal.write(`\r\n[${editorNames[currentActiveEditor]}] $ ${command}\r\n`);
+            
+            // Send command via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'command',
+                    content: command,
+                    session: currentSessionId,
+                    currentWindow: currentWindowIndex || 2,
+                    editor: currentActiveEditor
+                }));
+            }
+            
+            // Clear the active editor
+            if (editors[currentActiveEditor]) {
+                editors[currentActiveEditor].clear();
+            }
+            currentInput = '';
+        }
             const command = currentInput.trim();
             if (!command) return;
             
