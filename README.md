@@ -6,6 +6,13 @@
 
 ## ✨ Latest Features (Major Update!)
 
+### 🎮 **Enhanced Interactive TUI (NEW!)**
+- **Gum-style filtering** with real-time character input
+- **Multiple navigation options**: ↑↓ arrows, Ctrl+P/N (Emacs), Ctrl+K (Vim)
+- **Blinking cursor feedback** with professional visual polish
+- **Zero key collisions** - type any character including 'q' to filter
+- **Fuzzy matching** with instant session filtering
+
 ### 🏷️ **Web-Native Tab Interface**
 - **Clickable tabs** instead of dropdown menus
 - **Visual activity indicators** with colored dots
@@ -30,9 +37,125 @@
 - **Dead connection cleanup** - automatic resource management
 - **Error-resistant WebSocket communication**
 
+## 🎮 **Interactive TUI System**
+
+QQ features a professional-grade Terminal User Interface built from scratch with gum-style interactions and zero flicker rendering.
+
+### **Core TUI Features**
+
+#### **🔍 Real-Time Filtering**
+- **Instant character input** - Type any character for immediate filtering
+- **Fuzzy matching** - Find sessions with partial character sequences
+- **Visual feedback** - Live filter display with blinking cursor
+- **Zero key collisions** - All printable characters available for filtering
+
+#### **⌨️ Multiple Navigation Styles**
+- **Arrow Keys** - ↑↓ for universal navigation
+- **Emacs Style** - Ctrl+P (previous) / Ctrl+N (next)
+- **Vim Style** - Ctrl+K (up) for vim users
+- **Consistent behavior** across all navigation methods
+
+#### **🎨 Visual Polish**
+- **Blinking cursor** - Professional 500ms blink cycle
+- **Session status** - 🟢 active / ⚪ inactive indicators  
+- **Pane count display** - Shows window/pane information
+- **Clean help text** - Context-sensitive key bindings
+
+### **TUI Architecture**
+
+#### **🏗️ Framework Design**
+- **Reactive state management** - Atom-based single source of truth
+- **Differential rendering** - Only updates when content changes
+- **Flicker-free display** - Professional-grade visual experience
+- **Terminal compatibility** - Raw mode with proper cleanup
+
+#### **🔧 Technical Implementation**
+```clojure
+; Core TUI loop
+State Atom → Watch → Content Compare → Render (if changed) → Terminal
+     ↑                                                           ↓
+Event Loop ← Input ← Terminal ←──────────────────────────────────┘
+```
+
+#### **⚡ Performance Characteristics**
+- **Zero flicker** - Differential rendering eliminates screen flash
+- **Low CPU usage** - Only renders on actual state changes
+- **Responsive input** - 50ms polling with non-blocking reads
+- **Smooth transitions** - Content changes appear instantly
+
+### **TUI Key Bindings**
+
+#### **🔍 Filtering Controls**
+- **Any character** → Filter sessions instantly
+- **Backspace** → Delete filter characters
+- **Escape** → Clear entire filter
+
+#### **📍 Navigation Controls**
+- **↑↓ Arrows** → Navigate filtered results
+- **Ctrl+P** → Previous (Emacs style)
+- **Ctrl+N** → Next (Emacs style)  
+- **Ctrl+K** → Up (Vim style)
+
+#### **🎯 Action Controls**
+- **Enter** → Select and attach to session
+- **Ctrl+C** → Quit TUI (no key collisions)
+
+### **TUI Usage Examples**
+
+#### **Basic Session Selection**
+```bash
+bb qq                    # Start interactive selector
+# Type characters to filter
+# Use arrows/Ctrl+P/N to navigate
+# Press Enter to attach
+```
+
+#### **Quick Filtering**
+```bash
+bb qq
+# Type "demo" → Shows only sessions with "demo"
+# Type "q" → Shows sessions with "q" (no quit collision)
+# Escape → Clear filter, show all sessions
+```
+
+#### **Multi-Style Navigation**
+```bash
+bb qq
+# Arrow users: ↑↓ to navigate
+# Emacs users: Ctrl+P/Ctrl+N to navigate  
+# Vim users: Ctrl+K to go up
+# All styles work identically
+```
+
+### **TUI Development**
+
+#### **🧪 Testing Methodology**
+- **tmux-based testing** - Real environment validation
+- **Visual confirmation** - Direct output inspection
+- **Incremental development** - One feature at a time
+- **Debug-driven approach** - Minimal debug scripts when needed
+
+#### **🔧 Technical Challenges Solved**
+- **Character input detection** - `case` vs `cond` for predicates
+- **Key collision resolution** - Removed special 'q' handling
+- **Cursor blinking** - Reactive state with background threads
+- **Terminal raw mode** - Proper stty setup and cleanup
+
 ## 🚀 Quick Start
 
-### Web Terminal Interface (NEW!)
+### Enhanced Interactive TUI (NEW!)
+```bash
+# Interactive session selector with gum-style filtering
+bb qq
+
+# Features:
+# - Type any character to filter sessions instantly
+# - ↑↓/Ctrl+P/Ctrl+N/Ctrl+K for navigation  
+# - Backspace to delete, Escape to clear filter
+# - Enter to select session, Ctrl+C to quit
+```
+
+### Web Terminal Interface
 ```bash
 # Start tmux sessions
 bb setup-tmux-sessions
@@ -96,6 +219,12 @@ Shell Command? Content Analysis   Current Window
 
 ## 📈 Recent Major Achievements
 
+### 🎮 **Gum-Style Interactive TUI Implementation**
+- Built professional-grade filtering with real-time character input
+- Implemented multiple navigation key bindings (arrows, Emacs, Vim styles)
+- Added blinking cursor and visual feedback systems
+- Solved key collision issues for seamless user experience
+
 ### 🎨 **Tab-Style Interface Implementation**
 - Replaced dropdown with clickable tabs
 - Added visual activity indicators
@@ -158,6 +287,7 @@ QQ consists of 5 core components:
 
 ## Documentation
 
+- **[TUI Enhancement Log](docs/tui-enhancement-log.md)** - Complete implementation journey and test methodology
 - **[Default Window Design](docs/default-window-design.md)** - Upcoming feature for immediate Q access
 - **[Architecture](docs/architecture.md)** - Detailed system design and component overview
 - **[Development Log](docs/development-log.md)** - Progress tracking and technical decisions

@@ -13,15 +13,18 @@
     (str prefix status " " name " " panes)))
 
 (defn render-sessions [state]
-  (let [{:keys [items selected]} state
+  (let [{:keys [items selected query cursor-visible]} state
+        filtered-items (tui/filter-items (or query "") items)
         header "🎯 QQ TMUX SESSIONS\r\n========================\r\n"
+        cursor (if cursor-visible "█" " ")
+        search-line (str "🔍 Filter: " (or query "") cursor "\r\n")
         sessions (str/join "\r\n" 
                    (map-indexed 
                      (fn [idx session]
                        (format-session session (= idx selected)))
-                     items))
-        footer "\r\n\r\n↑↓ Navigate | Enter Select | q Quit"]
-    (str header sessions footer)))
+                     filtered-items))
+        footer "\r\n\r\n↑↓/Ctrl+P/Ctrl+N/Ctrl+K Navigate | Esc Clear | Enter Select | Backspace Delete | Ctrl+C Quit"]
+    (str header search-line sessions footer)))
 
 (defn get-tmux-sessions []
   (try
@@ -40,15 +43,29 @@
       [])))
 
 (defn attach-session [session]
-  (println (str "Attaching to: " (:name session)))
-  ; TODO: Implement actual tmux attach
-  )
+  (println (str "🔗 Attaching to session: " (:name session)))
+  (try
+    ; Use tmux attach-session command
+    (let [result (process/shell {:inherit true} "tmux" "attach-session" "-t" (:name session))]
+      (if (zero? (:exit result))
+        (println "✅ Session attached successfully")
+        (println "❌ Failed to attach to session")))
+    (catch Exception e
+      (println "❌ Error attaching to session:" (.getMessage e)))))
 
 (defn qq-interactive []
   (let [sessions (get-tmux-sessions)
         app (tui/create-app 
-              {:items sessions :selected 0}
+              {:items sessions :selected 0 :query "" :cursor-visible true}
               render-sessions)]
+    
+    ; Start cursor blinking
+    (future
+      (loop []
+        (Thread/sleep 500) ; Blink every 500ms
+        (when @(:running app)
+          (swap! (:state app) update :cursor-visible not)
+          (recur))))
     
     ; Start background refresh for testing reactive updates
     (future
@@ -60,6 +77,6 @@
         (when @(:running app)
           (recur))))
     
-    (let [result (tui/start-app app)]
+    (let [result (tui/start-filter-app app)]
       (when result
         (attach-session result)))))
