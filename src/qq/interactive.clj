@@ -43,40 +43,24 @@
       [])))
 
 (defn attach-session [session]
-  (println (str "🔗 Attaching to session: " (:name session)))
-  (try
-    ; Use tmux attach-session command
-    (let [result (process/shell {:inherit true} "tmux" "attach-session" "-t" (:name session))]
-      (if (zero? (:exit result))
-        (println "✅ Session attached successfully")
-        (println "❌ Failed to attach to session")))
-    (catch Exception e
-      (println "❌ Error attaching to session:" (.getMessage e)))))
+  (if (System/getenv "TMUX")
+    ; We're already inside tmux - provide instructions instead of attaching
+    (do
+      (println (str "🔗 Session: " (:name session)))
+      (println (str "📋 To attach from outside tmux, run: tmux attach-session -t " (:name session)))
+      (println "⚠️  Cannot attach from within tmux session"))
+    ; We're not in tmux - safe to attach
+    (do
+      (println (str "🔗 Attaching to session: " (:name session)))
+      (try
+        (let [result (process/shell {:inherit true} "tmux" "attach-session" "-t" (:name session))]
+          (if (zero? (:exit result))
+            (println "✅ Session attached successfully")
+            (println "❌ Failed to attach to session")))
+        (catch Exception e
+          (println "❌ Error attaching to session:" (.getMessage e)))))))
 
 (defn qq-interactive []
-  (let [sessions (get-tmux-sessions)
-        app (tui/create-app 
-              {:items sessions :selected 0 :query "" :cursor-visible true}
-              render-sessions)]
-    
-    ; Start cursor blinking
-    (future
-      (loop []
-        (Thread/sleep 500) ; Blink every 500ms
-        (when @(:running app)
-          (swap! (:state app) update :cursor-visible not)
-          (recur))))
-    
-    ; Start background refresh for testing reactive updates
-    (future
-      (loop []
-        (Thread/sleep 2000) ; Refresh every 2 seconds
-        (let [new-sessions (get-tmux-sessions)]
-          (when (not= new-sessions (:items @(:state app)))
-            (swap! (:state app) assoc :items new-sessions)))
-        (when @(:running app)
-          (recur))))
-    
-    (let [result (tui/start-filter-app app)]
-      (when result
-        (attach-session result)))))
+  (let [result (tui/select-from get-tmux-sessions render-sessions)]
+    (when result
+      (attach-session result))))

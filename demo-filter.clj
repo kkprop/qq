@@ -19,12 +19,8 @@
 
 (defn demo-filter []
   (let [items ["apple" "banana" "cherry" "date" "elderberry" "fig" "grape" "honeydew"]
-        app (qq.tui/create-app 
-              {:items items :selected 0 :query ""}
-              render-demo)]
-    
-    (let [result (qq.tui/start-filter-app app)]
-      (when result
-        (println (str "\nYou selected: " result))))))
+        result (qq.tui/select-from items render-demo)]
+    (when result
+      (println (str "\nYou selected: " result)))))
 
 (demo-filter)

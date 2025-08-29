@@ -95,6 +95,36 @@
    :render render-fn
    :running (atom true)})
 
+(defn create-filter-selector
+  "High-level API for creating a filterable selector with automatic management"
+  [items render-fn & {:keys [refresh-fn refresh-interval cursor-blink]
+                      :or {refresh-interval 2000 cursor-blink true}}]
+  (let [app (create-app 
+              {:items items :selected 0 :query "" :cursor-visible true}
+              render-fn)]
+    
+    ; Auto-manage cursor blinking if enabled
+    (when cursor-blink
+      (future
+        (loop []
+          (Thread/sleep 500)
+          (when @(:running app)
+            (swap! (:state app) update :cursor-visible not)
+            (recur)))))
+    
+    ; Auto-manage background refresh if provided
+    (when refresh-fn
+      (future
+        (loop []
+          (Thread/sleep refresh-interval)
+          (when @(:running app)
+            (let [new-items (refresh-fn)]
+              (when (not= new-items (:items @(:state app)))
+                (swap! (:state app) assoc :items new-items)))
+            (recur)))))
+    
+    app))
+
 (defn start-filter-app [app]
   "Enhanced app with filtering support"
   (let [{:keys [state render running]} app]
@@ -140,6 +170,19 @@
         (restore-terminal)))
     
     (:result @state)))
+
+(defn select-from
+  "Smart API: auto-detects static data vs dynamic function"
+  [data-or-fn render-fn & {:keys [refresh-interval] :or {refresh-interval 2000}}]
+  (let [is-function? (fn? data-or-fn)
+        initial-items (if is-function? (data-or-fn) data-or-fn)
+        refresh-fn (when is-function? data-or-fn)
+        app (create-filter-selector 
+              initial-items 
+              render-fn 
+              :refresh-fn refresh-fn
+              :refresh-interval refresh-interval)]
+    (start-filter-app app)))
 
 (defn start-app [app]
   "Original simple app without filtering"
