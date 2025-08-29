@@ -1,4 +1,4 @@
-{:paths ["src" "web"]  ; Include web directory for templates/static files
+{:paths ["src" "web"]
  :deps {org.clojure/data.json {:mvn/version "2.4.0"}
         babashka/process {:mvn/version "0.5.21"}
         etaoin/etaoin {:mvn/version "1.0.40"}}
@@ -12,34 +12,9 @@
              [qq.web.server :as web]
              [qq.browser.control :as browser]
              [qq.session.manager :as session-mgr]
-             [qq.browser.dashboard-tests :as dashboard-tests]
-             [qq.browser.testing :as browser-testing]
              [qq.terminal.server :as terminal-server]
              [qq.terminal.bridge :as terminal-bridge]
-             [qq.terminal.websocket-server :as ws-server]  ; THE definitive WebSocket server
-             [qq.terminal.command-test :as cmd-test]
-             [qq.terminal.qa-flow-test :as qa-test]
-             [qq.browser.input-test :as input-test]
-             [qq.browser.qa-flow-test :as browser-qa-test]
-             [qq.browser.direct-websocket-test :as direct-ws-test]
-             [qq.browser.user-behavior-test :as user-test]
-             [qq.browser.final-qa-test :as final-test]
-             [qq.browser.shell-functionality-test :as shell-test]
-             [qq.browser.automated-typing-test :as auto-type-test]
-             [qq.browser.sendkeys-test :as sendkeys-test]
-             [qq.browser.improved-sendkeys-test :as improved-sendkeys-test]
-             [qq.browser.etaoin-direct-test :as etaoin-direct-test]
-             [qq.browser.etaoin-websocket-test :as etaoin-ws-test]
-             [qq.browser.streaming-etaoin-test :as streaming-test]  ; Streaming character test
-             [qq.browser.main-terminal-streaming-test :as main-streaming-test]  ; Main terminal streaming integration
-             [qq.browser.auto-streaming-test :as auto-streaming-test]  ; Automatic streaming test
-             [qq.browser.aggressive-mirroring-test :as aggressive-mirroring-test]  ; Aggressive tmux mirroring test
-             [qq.browser.manual-typing-debug :as manual-debug]
-             [qq.browser.simple-websocket-test :as simple-ws-test]  ; Simple WebSocket test
-             [qq.process.monitor :as process-monitor]  ; Process monitoring
-             [qq.process.websocket-bridge :as ws-bridge]  ; Process-to-WebSocket bridge
-             [qq.tmux.websocket-bridge :as tmux-bridge]  ; Tmux-to-WebSocket bridge
-             [qq.tmux.simple-streaming :as simple-streaming])  ; Simple streaming integration
+             [qq.terminal.websocket-server :as ws-server])
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -47,6 +22,10 @@
   
   test {:doc "Run tests"
         :task (shell "bb -m qq.test")}
+  
+  ;; Direct Q access
+  q {:doc "Attach to Q tmux session (creates if needed)"
+     :task (babashka.process/exec ["tmux" "new-session" "-A" "-s" "qq" "q" "chat"])}
   
   ;; Main QQ commands
   create {:doc "Create a new Q session with context"
@@ -109,7 +88,6 @@
   monitor-summary {:doc "Show Q conversation summary"
                    :task (monitor/display-q-summary)}
   
-  ;; Resource monitoring tasks
   monitor-resources {:doc "Show CPU and memory usage for all tmux windows"
                      :task (monitor/display-all-window-resources)}
   
@@ -119,24 +97,16 @@
   monitor-top {:doc "Show top resource consuming windows"
                :task (monitor/display-top-consumers :limit 10)}
   
-  monitor-top-detailed {:doc "Show top resource consuming windows with detailed sorting info"
-                        :task (monitor/display-top-consumers-detailed :limit 10)}
-  
-  ;; Context monitoring tasks
   monitor-context-activity {:doc "Show recent /context command activity"
                             :task (context-monitor/display-context-activity)}
   
   monitor-context-status {:doc "Show current context status for all Q sessions"
                           :task (context-monitor/display-all-contexts)}
   
-  monitor-context-watch {:doc "Continuously watch for context activity"
-                         :task (context-monitor/watch-context-activity)}
+  monitor-q-commands {:doc "Show recent Q command activity"
+                      :task (cmd/display-command-activity)}
   
-  monitor-context-scan {:doc "Scan all Q sessions once for context activity"
-                        :task (do (context-monitor/monitor-all-q-sessions)
-                                 (println "✅ Context monitoring scan complete"))}
-  
-  ;; Transparent Q command wrappers
+  ;; Q command wrappers
   context {:doc "Transparent wrapper for Q /context commands (usage: bb context add file.clj)"
            :task (apply cmd/cmd-context *command-line-args*)}
   
@@ -155,20 +125,7 @@
   q-model {:doc "Select Q model with tracking (usage: bb q-model [model-name])"
            :task (apply cmd/cmd-model *command-line-args*)}
   
-  q-compact {:doc "Compact Q conversation with monitoring"
-             :task (cmd/cmd-compact)}
-  
-  q-editor {:doc "Open external editor for Q prompt composition"
-            :task (cmd/cmd-editor)}
-  
-  ;; Q command monitoring
-  monitor-q-commands {:doc "Show recent Q command activity"
-                      :task (cmd/display-command-activity)}
-  
-  monitor-q-summary {:doc "Show Q command usage summary"
-                     :task (cmd/display-command-summary)}
-  
-  ;; Web Interface Tasks
+  ;; Web Interface
   web {:doc "Start QQ web dashboard on localhost:9090"
        :task (web/start-server {:port 9090})}
   
@@ -178,52 +135,7 @@
   web-stop {:doc "Stop the running web server"
             :task (web/stop-server)}
   
-  web-status {:doc "Check web server status"
-              :task (println (web/server-status))}
-  
-  ;; Browser Automation Tasks
-  browser-debug {:doc "Debug QQ dashboard with browser automation"
-                 :task (browser/debug-session-rendering-issue)}
-  
-  browser-test {:doc "Quick test if dashboard loads properly"
-                :task (browser/test-dashboard-loads)}
-  
-  browser-screenshot {:doc "Take a quick screenshot of dashboard"
-                      :task (browser/quick-screenshot)}
-  
-  browser-interactive {:doc "Start interactive debugging session"
-                       :task (browser/interactive-debug)}
-  
-  browser-simple {:doc "Open browser to dashboard and wait for manual inspection"
-                  :task (browser/simple-browser-test)}
-  
-  browser-debug-live {:doc "Debug the currently open browser (run while browser is open)"
-                      :task (browser/debug-current-browser)}
-  
-  browser-auto-test {:doc "Run automated browser tests with Etaoin control"
-                     :task (browser/interactive-automated-test)}
-  
-  create-q-session {:doc "Create a new Q chat session in tmux"
-                    :task (session-mgr/create-q-session (or (first *command-line-args*) 
-                                                           (str "qq-session-" (System/currentTimeMillis))))}
-  
-  list-q-sessions {:doc "List all active Q sessions"
-                   :task (session-mgr/get-active-sessions)}
-  
-  test-dashboard-phase1 {:doc "Phase 1: Comprehensive dashboard functionality testing"
-                         :task (browser/phase1-dashboard-testing)}
-  
-  ;; 🤖 Browser Testing Framework Tasks
-  quick-dashboard-test {:doc "⚡ Quick dashboard functionality validation"
-                        :task (browser-testing/quick-dashboard-test)}
-  
-  interactive-dashboard-test {:doc "🎮 Interactive dashboard test with manual inspection"
-                              :task (browser-testing/interactive-dashboard-test)}
-  
-  comprehensive-dashboard-test {:doc "🎯 Full comprehensive dashboard test suite"
-                                :task (browser-testing/run-comprehensive-dashboard-test)}
-  
-  ;; 🖥️ Terminal Server Tasks
+  ;; Terminal Server
   start-terminal-server {:doc "🚀 Start WebSocket terminal server"
                          :task (ws-server/start-websocket-server 9091)}
   
@@ -236,99 +148,14 @@
   list-terminal-sessions {:doc "📋 List all terminal Q sessions"
                           :task (terminal-bridge/list-all-sessions)}
   
-  ;; 🚀 THE WebSocket Server (The Only One You Need)
-  start-websocket-server {:doc "🚀 Start THE definitive WebSocket server"
-                          :task (ws-server/start-websocket-server 9091)}
+  ;; Session Management
+  create-q-session {:doc "Create a new Q chat session in tmux"
+                    :task (session-mgr/create-q-session (or (first *command-line-args*) 
+                                                           (str "qq-session-" (System/currentTimeMillis))))}
   
-  stop-websocket-server {:doc "🛑 Stop THE WebSocket server"
-                         :task (ws-server/stop-websocket-server)}
+  list-q-sessions {:doc "List all active Q sessions"
+                   :task (session-mgr/get-active-sessions)}
   
-  websocket-server-status {:doc "📊 Get THE WebSocket server status"
-                           :task (ws-server/server-status)}
-  
-  ;; 🧪 Testing
-  test-direct-websocket {:doc "🧪 Test direct WebSocket communication"
-                         :task (direct-ws-test/test-direct-websocket)}
-  
-  test-user-behavior {:doc "🎯 Test real user behavior simulation (typing + Enter)"
-                      :task (user-test/test-user-behavior)}
-  
-  test-final-qa {:doc "🚀 FINAL Q&A TEST - Complete end-to-end flow"
-                 :task (final-test/test-final-qa)}
-  
-  test-shell-functionality {:doc "🐚 Test full shell experience (backspace, arrows, ctrl shortcuts, history)"
-                            :task (shell-test/test-shell-functionality)}
-  
-  test-automated-typing {:doc "⌨️ Test automated typing using multiple approaches (etaoin, sendkeys, AppleScript)"
-                         :task (auto-type-test/test-automated-typing)}
-  
-  test-sendkeys {:doc "🎯 Test real typing using sendkeys utility (system-level automation)"
-                 :task (sendkeys-test/test-sendkeys-typing)}
-  
-  test-improved-sendkeys {:doc "🚀 Improved sendkeys test with better focus handling"
-                          :task (improved-sendkeys-test/test-improved-sendkeys)}
-  
-  test-etaoin-direct {:doc "🎯 Direct etaoin test using JavaScript event simulation (most reliable)"
-                      :task (etaoin-direct-test/test-etaoin-direct-typing)}
-  
-  test-etaoin-websocket {:doc "🚀 MOST CONVENIENT: Etaoin + direct WebSocket messaging (perfect balance)"
-                         :task (etaoin-ws-test/test-etaoin-websocket)}
-  
-  debug-manual-typing {:doc "🔍 Debug manual typing Enter key issue with logging"
-                       :task (manual-debug/test-manual-typing-debug)}
-  
-  test-simple-websocket {:doc "🧪 Simple WebSocket test (no web server dependency)"
-                         :task (simple-ws-test/test-websocket-directly)}
-  
-  test-process-monitor {:doc "🔍 Test capturing actual stdout text from process"
-                        :task (process-monitor/test-process-monitor-stdout)}
-  
-  test-websocket-bridge {:doc "🌉 Test process-to-WebSocket bridge"
-                         :task (ws-bridge/test-process-websocket-bridge)}
-  
-  test-tmux-bridge {:doc "🌉 Test tmux-to-WebSocket bridge (cross-platform)"
-                    :task (tmux-bridge/test-tmux-websocket-bridge)}
-  
-  test-simple-streaming {:doc "🌊 Test simple streaming integration"
-                         :task (simple-streaming/test-simple-streaming)}
-  
-  test-streaming-display {:doc "🌊 Test character-by-character streaming display with etaoin"
-                          :task (streaming-test/test-streaming-display)}
-  
-  test-main-terminal-streaming {:doc "🌊 Test integrated streaming in main terminal.html"
-                                :task (main-streaming-test/test-integration)}
-  
-  test-auto-streaming {:doc "🌊 Test automatic streaming with clean display"
-                       :task (auto-streaming-test/test-auto-streaming)}
-  
-  test-aggressive-mirroring {:doc "🚀 Test aggressive tmux mirroring with full history sync"
-                             :task (aggressive-mirroring-test/test-mirroring)}
-  
-  ;; 🧪 Complete Q&A Flow Testing
-  test-qa-interaction {:doc "🧪 Test complete Q&A interaction through browser"
-                       :task (browser-qa-test/test-qa-interaction)}
-  
-  ;; 🧪 Command Forwarding Testing
-  test-command-forwarding {:doc "🧪 Test command forwarding to tmux"
-                           :task (cmd-test/test-command-forwarding)}
-  
-  ;; 🧪 Browser Input Testing
-  test-browser-input {:doc "🧪 Test typing in browser terminal interface"
-                      :task (input-test/test-browser-input)}
-  
-  working-server-status {:doc "📊 Get QA-tested server status"
-                         :task (working-ws/server-status)}
-  
-  ;; 🔄 Q&A Flow Testing
-  test-qa-flow {:doc "🧪 Test browser ↔ tmux Q&A flow"
-                :task (qa-test/run-qa-flow-tests)}
-  
-  simulate-browser-command {:doc "📤 Simulate browser command to Q session"
-                            :task (let [command (first *command-line-args*)
-                                       session (or (second *command-line-args*) "default")]
-                                   (if command
-                                     (qa-test/test-qa-flow command session)
-                                     (println "Usage: bb simulate-browser-command \"command\" [session-id]")))}
-  
-  test-terminal-interface {:doc "🖥️ Test browser-based terminal interface"
-                           :task (browser-testing/test-terminal-interface)}}}
+  ;; Browser Control (essential only)
+  browser-screenshot {:doc "Take a quick screenshot of dashboard"
+                      :task (browser/quick-screenshot)}}}
