@@ -14,7 +14,8 @@
              [qq.session.manager :as session-mgr]
              [qq.terminal.server :as terminal-server]
              [qq.terminal.bridge :as terminal-bridge]
-             [qq.terminal.websocket-server :as ws-server])
+             [qq.terminal.websocket-server :as ws-server]
+             [qq.bootstrap :as bootstrap])
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -26,6 +27,10 @@
   ;; Direct Q access
   q {:doc "Attach to Q tmux session (creates if needed)"
      :task (babashka.process/exec ["tmux" "new-session" "-A" "-s" "qq" "q" "chat"])}
+  
+  ;; Shell completion setup
+  shell-completion {:doc "Setup bash tab completion for bb tasks"
+                    :task (apply bootstrap/setup-shell-completion *command-line-args*)}
   
   ;; Main QQ commands
   create {:doc "Create a new Q session with context"
