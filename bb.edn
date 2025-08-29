@@ -15,7 +15,8 @@
              [qq.terminal.server :as terminal-server]
              [qq.terminal.bridge :as terminal-bridge]
              [qq.terminal.websocket-server :as ws-server]
-             [qq.bootstrap :as bootstrap])
+             [qq.bootstrap :as bootstrap]
+             [qq.interactive :as interactive])
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -31,6 +32,10 @@
   ;; Shell completion setup
   shell-completion {:doc "Setup bash tab completion for bb tasks"
                     :task (apply bootstrap/setup-shell-completion *command-line-args*)}
+  
+  ;; Interactive session selector
+  qq {:doc "Interactive tmux session selector"
+      :task (qq.interactive/qq-interactive)}
   
   ;; Main QQ commands
   create {:doc "Create a new Q session with context"

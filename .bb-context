@@ -1,0 +1,46 @@
+# BB Tasks Context for Amazon Q
+# Available bb tasks in this project:
+# bb dev-repl
+# bb test
+# bb q
+# bb shell-completion
+# bb create
+# bb ask
+# bb list
+# bb attach
+# bb switch
+# bb switch-default
+# bb monitor-windows
+# bb monitor-q
+# bb monitor-status
+# bb monitor-activity
+# bb monitor-summary
+# bb monitor-resources
+# bb monitor-q-resources
+# bb monitor-top
+# bb monitor-context-activity
+# bb monitor-context-status
+# bb monitor-q-commands
+# bb context
+# bb q-save
+# bb q-load
+# bb q-tools
+# bb q-usage
+# bb q-model
+# bb web
+# bb web-dev
+# bb web-stop
+# bb start-terminal-server
+# bb stop-terminal-server
+# bb terminal-status
+# bb list-terminal-sessions
+# bb create-q-session
+# bb list-q-sessions
+# bb browser-screenshot
+
+# Common bb usage patterns:
+# bb q                    # Direct Q access
+# bb create "context"     # Create Q session
+# bb ask "question"      # Ask current session
+# bb list                # List all sessions
+# bb monitor-resources   # Monitor system resources
