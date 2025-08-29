@@ -7,7 +7,10 @@
 ## ✨ Latest Features (Major Update!)
 
 ### 🎮 **Enhanced Interactive TUI (NEW!)**
-- **Gum-style filtering** with real-time character input
+- **Gum-style API** - Zero configuration required, just pass data
+- **Three-level compatibility** - Simple to advanced customization
+- **Universal data support** - Strings, keywords, maps, functions
+- **Real-time filtering** with instant character input
 - **Multiple navigation options**: ↑↓ arrows, Ctrl+P/N (Emacs), Ctrl+K (Vim)
 - **Blinking cursor feedback** with professional visual polish
 - **Zero key collisions** - type any character including 'q' to filter

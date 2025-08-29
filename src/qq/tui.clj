@@ -171,15 +171,44 @@
     
     (:result @state)))
 
+(defn default-item-display [item]
+  "Default way to display an item"
+  (cond
+    (map? item) (or (:name item) (:title item) (str item))
+    (string? item) item
+    :else (str item)))
+
+(defn default-render [state & {:keys [title item-fn] 
+                               :or {title "SELECT ITEM" item-fn default-item-display}}]
+  "Default gum-style renderer"
+  (let [{:keys [items selected query cursor-visible]} state
+        filtered-items (filter-items (or query "") items)
+        header (str "🎯 " title "\r\n" (apply str (repeat (+ 4 (count title)) "=")) "\r\n")
+        cursor (if cursor-visible "█" " ")
+        search-line (str "🔍 Filter: " (or query "") cursor "\r\n")
+        item-list (clojure.string/join "\r\n" 
+                    (map-indexed 
+                      (fn [idx item]
+                        (let [prefix (if (= idx selected) "► " "  ")
+                              display (item-fn item)]
+                          (str prefix display)))
+                      filtered-items))
+        footer "\r\n\r\n↑↓/Ctrl+P/Ctrl+N/Ctrl+K Navigate | Esc Clear | Enter Select | Backspace Delete | Ctrl+C Quit"]
+    (str header search-line item-list footer)))
+
 (defn select-from
-  "Smart API: auto-detects static data vs dynamic function"
-  [data-or-fn render-fn & {:keys [refresh-interval] :or {refresh-interval 2000}}]
+  "Gum-style API: auto-renders by default, customizable for picky users"
+  [data-or-fn & {:keys [render-fn title item-fn refresh-interval] 
+                 :or {refresh-interval 2000}}]
   (let [is-function? (fn? data-or-fn)
         initial-items (if is-function? (data-or-fn) data-or-fn)
         refresh-fn (when is-function? data-or-fn)
+        ; Use custom render-fn OR default with customizations
+        final-render-fn (or render-fn 
+                           #(default-render % :title title :item-fn item-fn))
         app (create-filter-selector 
               initial-items 
-              render-fn 
+              final-render-fn
               :refresh-fn refresh-fn
               :refresh-interval refresh-interval)]
     (start-filter-app app)))

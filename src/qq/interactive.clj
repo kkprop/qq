@@ -61,6 +61,13 @@
           (println "❌ Error attaching to session:" (.getMessage e)))))))
 
 (defn qq-interactive []
-  (let [result (tui/select-from get-tmux-sessions render-sessions)]
+  (let [result (tui/select-from 
+                 get-tmux-sessions 
+                 :title "QQ TMUX SESSIONS"
+                 :item-fn (fn [session]
+                           (let [status (if (:active session) "🟢" "⚪")
+                                 name (:name session)
+                                 panes (str "(" (:panes session) " panes)")]
+                             (str status " " name " " panes))))]
     (when result
       (attach-session result))))
