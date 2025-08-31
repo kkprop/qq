@@ -34,8 +34,8 @@
                     :task (apply bootstrap/setup-shell-completion *command-line-args*)}
   
   ;; Interactive session selector
-  qq {:doc "Interactive tmux session selector"
-      :task (qq.interactive/qq-interactive)}
+  qq {:doc "Interactive tmux session selector or create/attach to named session"
+      :task (interactive/qq-interactive-with-args *command-line-args*)}
   
   ;; Main QQ commands
   create {:doc "Create a new Q session with context"

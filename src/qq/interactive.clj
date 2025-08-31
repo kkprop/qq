@@ -60,14 +60,70 @@
         (catch Exception e
           (println "❌ Error attaching to session:" (.getMessage e)))))))
 
-(defn qq-interactive []
-  (let [result (tui/select-from 
-                 get-tmux-sessions 
-                 :title "QQ TMUX SESSIONS"
-                 :item-fn (fn [session]
-                           (let [status (if (:active session) "🟢" "⚪")
-                                 name (:name session)
-                                 panes (str "(" (:panes session) " panes)")]
-                             (str status " " name " " panes))))]
-    (when result
-      (attach-session result))))
+(defn decorate-session-name [name]
+  "Add qq- prefix if not already present"
+  (if (str/starts-with? name "qq-")
+    name
+    (str "qq-" name)))
+
+(defn session-exists? [session-name]
+  "Check if tmux session exists"
+  (try
+    (let [result (process/shell {:out :string :continue true} "tmux" "has-session" "-t" session-name)]
+      (zero? (:exit result)))
+    (catch Exception e false)))
+
+(defn create-or-attach-session [session-name]
+  "Create session if it doesn't exist, then attach"
+  (let [decorated-name (decorate-session-name session-name)]
+    (if (System/getenv "TMUX")
+      ; Inside tmux - show instructions
+      (do
+        (println (str "🔗 Session: " decorated-name))
+        (if (session-exists? decorated-name)
+          (println (str "📋 To attach: tmux attach-session -t " decorated-name))
+          (println (str "📋 To create: tmux new-session -s " decorated-name " q chat")))
+        (println "⚠️  Cannot attach from within tmux session"))
+      ; Outside tmux - create or attach
+      (do
+        (if (session-exists? decorated-name)
+          (println (str "🔗 Attaching to existing session: " decorated-name))
+          (println (str "✨ Creating new session: " decorated-name)))
+        (try
+          (let [result (process/shell {:inherit true} "tmux" "new-session" "-A" "-s" decorated-name "q" "chat")]
+            (if (zero? (:exit result))
+              (println "✅ Session ready")
+              (println "❌ Failed to create/attach session")))
+          (catch Exception e
+            (println "❌ Error:" (.getMessage e))))))))
+
+(defn qq-interactive-with-args [args]
+  "Enhanced qq command with smart session management"
+  (if (empty? args)
+    ; No args - show interactive selector with "Create New" option
+    (let [sessions (get-tmux-sessions)
+          ; Add "Create New" option to the list
+          options (conj sessions {:name "➕ Create New Session" :special :create-new :active false :panes 0})
+          result (tui/select-from 
+                   options
+                   :title "QQ TMUX SESSIONS"
+                   :item-fn (fn [session]
+                             (if (= (:special session) :create-new)
+                               "➕ Create New Session"
+                               (let [status (if (:active session) "🟢" "⚪")
+                                     name (:name session)
+                                     panes (str "(" (:panes session) " panes)")]
+                                 (str status " " name " " panes)))))]
+      (when result
+        (if (= (:special result) :create-new)
+          ; Handle create new session
+          (do
+            (print "Enter new session name: ")
+            (flush)
+            (let [new-name (read-line)]
+              (when (not (str/blank? new-name))
+                (create-or-attach-session new-name))))
+          ; Handle existing session selection
+          (attach-session result))))
+    ; Args provided - smart create or attach
+    (create-or-attach-session (first args))))
