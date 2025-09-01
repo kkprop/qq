@@ -8,7 +8,7 @@
   
   ; Create test session and run bb qq
   (p/shell "tmux" "new-session" "-d" "-s" "test-interactive-tui" 
-           "bash" "-c" "cd /Users/dc/kkprop/qq && bb qq")
+           "bash" "-c" "cd . && bb qq")
   
   (Thread/sleep 3000) ; Wait for TUI to load
   
@@ -53,6 +53,6 @@
   (println "   - Ctrl+P/Ctrl+N navigation worked")
   (println "   - Backspace removed characters")
   (println "   - Escape cleared filter")
-  (println "\n🎯 To manually test: tmux new-session -s manual-test 'cd /Users/dc/kkprop/qq && bb qq'"))
+  (println "\n🎯 To manually test: tmux new-session -s manual-test 'cd . && bb qq'"))
 
 (test-interactive-tui)

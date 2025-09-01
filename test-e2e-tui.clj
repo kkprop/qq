@@ -26,7 +26,7 @@
   (Thread/sleep 1000)
   
   ; Start bb qq
-  (send-keys "e2e-test-qq" "cd /Users/dc/kkprop/qq && bb qq" "Enter")
+  (send-keys "e2e-test-qq" "cd . && bb qq" "Enter")
   (Thread/sleep 2000)
   
   (println "📺 Initial screen:")

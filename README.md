@@ -146,6 +146,19 @@ bb qq
 
 ## 🚀 Quick Start
 
+### **🔧 One-Time Global Setup (NEW!)**
+```bash
+# Setup global 'bq' alias for universal access
+bb setup
+
+# Source your shell profile (or restart terminal)
+source ~/.zshrc  # or ~/.bashrc
+
+# Now use from any directory!
+cd /my/project
+bq qq my-work    # Creates qq-my-work in /my/project
+```
+
 ### Enhanced Interactive TUI (NEW!)
 ```bash
 # Interactive session selector with gum-style filtering

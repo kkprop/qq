@@ -90,7 +90,7 @@
           (println (str "🔗 Attaching to existing session: " decorated-name))
           (println (str "✨ Creating new session: " decorated-name)))
         (try
-          (let [result (process/shell {:inherit true} "tmux" "new-session" "-A" "-s" decorated-name "q" "chat")]
+          (let [result (process/shell {:inherit true} "tmux" "new-session" "-A" "-s" decorated-name "-c" (System/getProperty "user.dir") "q" "chat")]
             (if (zero? (:exit result))
               (println "✅ Session ready")
               (println "❌ Failed to create/attach session")))

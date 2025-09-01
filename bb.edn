@@ -16,7 +16,8 @@
              [qq.terminal.bridge :as terminal-bridge]
              [qq.terminal.websocket-server :as ws-server]
              [qq.bootstrap :as bootstrap]
-             [qq.interactive :as interactive])
+             [qq.interactive :as interactive]
+             [qq.setup :as setup])
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
@@ -28,6 +29,10 @@
   ;; Direct Q access
   q {:doc "Attach to Q tmux session (creates if needed)"
      :task (babashka.process/exec ["tmux" "new-session" "-A" "-s" "qq" "q" "chat"])}
+  
+  ;; Global setup
+  setup {:doc "Setup global 'bq' alias for qq commands from any directory"
+         :task (setup/setup-global-alias)}
   
   ;; Shell completion setup
   shell-completion {:doc "Setup bash tab completion for bb tasks"
