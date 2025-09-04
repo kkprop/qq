@@ -1,0 +1,18 @@
+;; QQ Configuration File
+;; Copy this to config.edn and fill in your values
+
+{;; Multiple Roam Research Graphs
+ :roam-graphs {:personal {:token "your-personal-roam-token"
+                          :graph "personal-graph-name"}
+               :work     {:token "your-work-roam-token"  
+                          :graph "work-graph-name"}
+               :research {:token "your-research-roam-token"
+                          :graph "research-graph-name"}}
+ 
+ ;; Default graph to use
+ :default-graph :personal
+ 
+ ;; Long-term Memory Settings
+ :memory-enabled true
+ :sync-interval-minutes 15
+ :auto-link-entities true}

@@ -6,7 +6,8 @@
             [babashka.process :as p]
             [qq.session :as session]
             [qq.tmux :as tmux]
-            [qq.naming :as naming]))
+            [qq.naming :as naming]
+            [qq.roam.client :as roam]))
 
 ;; Configuration
 (def ^:private MAX-SESSIONS 21)
@@ -211,6 +212,14 @@
         (println (str "❌ Session not found: " session-name-or-id))))))
 
 ;; CLI Entry Point
+(defn show-pages [& args]
+  "Show layers from specific page"
+  (if (>= (count args) 2)
+    (let [graph-key (keyword (first args))
+          page-title (second args)]
+      (roam/show-page-layers graph-key page-title))
+    (println "Usage: bb show-pages :graph \"Page Title\"")))
+
 (defn -main [& args]
   (case (first args)
     "create" (let [context (second args)]

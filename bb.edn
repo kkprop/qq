@@ -42,6 +42,10 @@
   setup {:doc "Setup global 'bq' alias for qq commands from any directory"
          :task (setup/setup-global-alias)}
   
+  ;; Config setup
+  config-setup {:doc "Setup QQ configuration file with Roam Research integration"
+                :task (shell "bb -e" "(require '[qq.config :as config]) (config/setup-config)")}
+  
   ;; Shell completion setup
   shell-completion {:doc "Setup bash tab completion for bb tasks"
                     :task (apply bootstrap/setup-shell-completion *command-line-args*)}
@@ -93,6 +97,15 @@
   switch-default {:doc "Switch to default session"
                   :task (core/switch-to-default)}
   
+  ;; Roam Research integration
+  roam-test-config {:doc "Test Roam Research configuration"
+                    :task (shell "bb -e" "(require '[qq.roam.test :as test]) (test/test-config)")}
+  
+  roam-test {:doc "Test Roam Research integration with sample data"
+             :task (shell "bb -e" "(require '[qq.roam.test :as test]) (test/test-roam-write)")}
+  
+  show-pages {:doc "Show layers from specific page: bb show-pages :graph \"Page Title\""
+              :task (apply core/show-pages *command-line-args*)}
   ;; Monitoring tasks
   monitor-windows {:doc "List all tmux windows"
                    :task (monitor/display-all-windows)}

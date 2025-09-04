@@ -1,0 +1,41 @@
+;; Sample Q&A topics for testing Roam Research integration
+;; These will be used to create layered blocks in Roam
+
+{:topics
+ [{:topic "Maria.cloud Interactive Programming"
+   :qa-pairs
+   [{:question "What is Maria.cloud and how does it help beginners learn Clojure?"
+     :answer "Maria.cloud is a beginner-friendly ClojureScript coding environment that combines carefully written curriculum with a clean, no-install editor. It's designed to introduce complete beginners to fundamental programming ideas, with an editing environment that encourages REPL-driven development and structural editing from day one. It has been widely used at ClojureBridge workshops."
+     :entities ["[[Maria.cloud]]" "[[ClojureScript]]" "[[REPL-driven development]]" "[[ClojureBridge]]"]}
+    
+    {:question "What are the key technical improvements in Maria.cloud's 2022 refactor?"
+     :answer "The 2022 refactor focuses on: (1) replacing the selfhost compiler with sci for a more lightweight runtime, (2) replacing the code editor with CodeMirror 6 using clojure-mode, (3) upgrading to latest ProseMirror, and (4) adding a publish feature for sharing creations. These changes dramatically reduce bundle size, improve mobile performance, and leverage community-supported tools."
+     :entities ["[[sci]]" "[[CodeMirror 6]]" "[[ProseMirror]]" "[[ClojuristsTogether]]"]}
+    
+    {:question "How does Maria.cloud's dataflow interface compare to Jupyter notebooks?"
+     :answer "Maria.cloud's notebook interface, especially the dataflow functionality, is considered much nicer than Jupyter. It provides a more interactive and visual way to work with code and data, making it particularly suitable for exploratory programming and teaching."
+     :entities ["[[dataflow programming]]" "[[Jupyter notebooks]]" "[[interactive programming]]"]}]}
+  
+  {:topic "Lisp Programming Language History"
+   :qa-pairs
+   [{:question "When was Lisp created and what does it stand for?"
+     :answer "Lisp was developed in the late 1950s (specifically 1958) by John McCarthy at MIT. Lisp stands for 'LISt Processing' and is known for its ability to manipulate symbolic data structures and its use of functional programming concepts. It's one of the oldest programming languages still in use today."
+     :entities ["[[John McCarthy]]" "[[MIT]]" "[[List Processing]]" "[[symbolic computation]]"]}
+    
+    {:question "What are the key milestones in Lisp's development history?"
+     :answer "Key milestones include: 1958 - John McCarthy develops first Lisp version; 1960s - Several dialects emerge (MacLisp, InterLisp, Lisp Machine Lisp); 1970s - Scheme developed as minimalist dialect; 1980s - Common Lisp developed as standard. Lisp has significantly influenced other languages like JavaScript, Python, Ruby, and functional languages like Haskell and Clojure."
+     :entities ["[[MacLisp]]" "[[InterLisp]]" "[[Scheme]]" "[[Common Lisp]]" "[[functional programming]]"]}
+    
+    {:question "Why is Lisp still used today despite being over 60 years old?"
+     :answer "Lisp remains relevant due to unique features: interactive programming (modify and test code interactively), powerful symbolic computation capabilities, macros (define custom syntax and language constructs), and its foundational role in AI research. These features make it attractive for specific applications requiring symbolic manipulation and rapid prototyping."
+     :entities ["[[interactive programming]]" "[[macros]]" "[[AI research]]" "[[symbolic manipulation]]"]}]}
+  
+  {:topic "Functional Programming Paradigms"
+   :qa-pairs
+   [{:question "Is Lisp considered a functional programming language?"
+     :answer "Lisp is generally considered multi-paradigm rather than purely functional. While it originated from lambda calculus and supports first-class functions, closures, and higher-order functions, Common Lisp also has OOP qualities and allows mutable state. Modern functional programming typically emphasizes immutable data and pure functions as defaults, which Lisp doesn't enforce."
+     :entities ["[[lambda calculus]]" "[[multi-paradigm]]" "[[first-class functions]]" "[[immutable data]]"]}
+    
+    {:question "How did lambda calculus influence functional programming?"
+     :answer "Lambda calculus, developed by Alonzo Church in the 1930s, became the conceptual bedrock of functional programming. It models all computation through function definition and application, establishing the principle that 'everything is a function.' This theoretical foundation influenced the development of functional languages and the emphasis on declarative computation over imperative, state-based programming."
+     :entities ["[[Alonzo Church]]" "[[lambda calculus]]" "[[declarative computation]]" "[[function definition]]"]}]}]}

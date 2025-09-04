@@ -36,3 +36,5 @@ screenshots/
 *.gif
 test-artifacts/
 browser-test-results/
+# Config files with sensitive data
+config.edn
