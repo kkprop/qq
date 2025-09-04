@@ -1,0 +1,16 @@
+[Unit]
+Description=QQ Watcher Daemon - Real-time Q&A timeline capture
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/homebrew/bin/bb watcher
+WorkingDirectory=/Users/dc/kkprop/qq
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

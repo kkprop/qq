@@ -1,7 +1,9 @@
 {:paths ["src" "web"]
  :deps {org.clojure/data.json {:mvn/version "2.4.0"}
         babashka/process {:mvn/version "0.5.21"}
-        etaoin/etaoin {:mvn/version "1.0.40"}}
+        etaoin/etaoin {:mvn/version "1.0.40"}
+        babashka/nrepl-client {:git/url "https://github.com/babashka/nrepl-client"
+                               :git/sha "19fbef2525e47d80b9278c49a545de58f48ee7cf"}}
  
  :tasks
  {:requires ([clojure.string :as str]
@@ -17,7 +19,23 @@
              [qq.terminal.websocket-server :as ws-server]
              [qq.bootstrap :as bootstrap]
              [qq.interactive :as interactive]
-             [qq.setup :as setup])
+             [qq.setup :as setup]
+             [qq.watcher :as watcher]
+             [babashka.nrepl-client :as nrepl])
+  
+  ;; Watcher daemon tasks
+  watcher {:doc "Start QQ watcher daemon with direct JSONL logging"
+           :task (watcher/start-watcher)}
+  
+  watcher-add {:doc "Add session to watcher"
+               :task (let [session-name (first *command-line-args*)]
+                       (if session-name
+                         (do
+                           (println "📝 Adding session" session-name "to watcher")
+                           (let [result (nrepl/eval-expr {:host "127.0.0.1" :port 7888 
+                                                         :expr (str "(qq.watcher/add-session \"" session-name "\")")})]
+                             (println "Response:" (:vals result))))
+                         (println "Usage: bb watcher-add <session-name>")))}
   
   ;; Development tasks
   dev-repl {:doc "Start development REPL"
