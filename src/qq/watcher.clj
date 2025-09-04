@@ -3,7 +3,8 @@
   (:require [babashka.nrepl.server :as nrepl]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [clojure.data.json :as json]))
+            [clojure.data.json :as json]
+            [qq.log :as log]))
 
 (def watcher-state (atom {:sessions #{} :watchers {}}))
 
@@ -43,7 +44,7 @@
     (io/make-parents timeline-file)
     ;; Append to timeline
     (spit timeline-file (str (json/write-str entry) "\n") :append true)
-    (println "📝 Direct JSONL logged:" question)))
+    (log/log-success "Direct JSONL logged:" question)))
 
 (defn start-direct-watcher [session-name]
   "Start direct JSONL watcher with simple polling"
@@ -133,14 +134,14 @@
 
 (defn start-watcher []
   "Start watcher daemon with nREPL and auto-discover existing sessions"
-  (println "🔍 Starting qq-watcher daemon with direct JSONL...")
+  (log/log-info "Starting qq-watcher daemon with direct JSONL...")
   (nrepl/start-server! {:port 7888 :host "127.0.0.1"})
-  (println "📡 nREPL server started on port 7888")
+  (log/log-success "nREPL server started on port 7888")
   
   ;; Auto-discover and reconnect to existing Q sessions
   (discover-existing-sessions)
   
-  (println "🎯 Ready to watch sessions with direct JSONL logging")
+  (log/log-success "Ready to watch sessions with direct JSONL logging")
   
   ;; Keep daemon alive
   (while true
