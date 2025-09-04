@@ -5,7 +5,7 @@ Welcome to the QQ documentation! This directory contains detailed design documen
 ## 📚 Documentation Index
 
 ### **Design Documents**
-- **[Default Window Design](default-window-design.md)** - Design for immediate Q access without session creation
+- **[Timeline Logging Design](timeline-logging-design.md)** - Real-time Q&A interaction capture and JSONL timeline generation- **[Default Window Design](default-window-design.md)** - Design for immediate Q access without session creation
 - **[Architecture](architecture.md)** - Complete system architecture and component overview
 - **[Action Plan](action-plan.md)** - 6-week implementation roadmap with priorities and timelines
 
