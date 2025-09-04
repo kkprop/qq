@@ -3,7 +3,8 @@
   (:require [qq.tui :as tui]
             [qq.tmux :as tmux]
             [clojure.string :as str]
-            [babashka.process :as process]))
+            [babashka.process :as process]
+            [babashka.nrepl-client :as nrepl]))
 
 (defn format-session [session selected?]
   (let [prefix (if selected? "► " "  ")
@@ -73,6 +74,15 @@
       (zero? (:exit result)))
     (catch Exception e false)))
 
+(defn auto-add-to-watcher [session-name]
+  "Automatically add session to watcher if daemon is running"
+  (try
+    (let [result (nrepl/eval-expr {:host "127.0.0.1" :port 7888 
+                                  :expr (str "(qq.watcher/add-session \"" session-name "\")")})]
+      (println "📝 Auto-added" session-name "to watcher"))
+    (catch Exception e
+      (println "⚠️ Watcher daemon not running - start with 'bb watcher' for logging"))))
+
 (defn create-or-attach-session [session-name]
   "Create session if it doesn't exist, then attach"
   (let [decorated-name (decorate-session-name session-name)]
@@ -90,6 +100,8 @@
           (println (str "🔗 Attaching to existing session: " decorated-name))
           (println (str "✨ Creating new session: " decorated-name)))
         (try
+          ; Auto-add to watcher before creating/attaching
+          (auto-add-to-watcher decorated-name)
           (let [result (process/shell {:inherit true} "tmux" "new-session" "-A" "-s" decorated-name "-c" (System/getProperty "user.dir") "q" "chat")]
             (if (zero? (:exit result))
               (println "✅ Session ready")
