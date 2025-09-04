@@ -56,7 +56,7 @@
                                (let [file (java.io.File. stream-file)]
                                  (if (.exists file)
                                    (let [current-size (.length file)]
-                                     (println "📊 Checking file" stream-file "- size:" current-size "last:" @last-size)
+
                                      (when (> current-size @last-size)
                                        (println "📊 File grew! Processing" (- current-size @last-size) "new bytes")
                                        (let [new-content (with-open [raf (java.io.RandomAccessFile. stream-file "r")]
@@ -90,7 +90,7 @@
     (let [stream-file (str (System/getProperty "user.dir") "/log/tmp/qq-stream-" session-name ".log")]
       ;; Ensure tmp directory exists
       (io/make-parents stream-file)
-      (let [result (babashka.process/shell {:continue true} 
+      (let [result (babashka.process/shell {:continue true :out :string :err :string} 
                                           "tmux" "pipe-pane" "-t" session-name 
                                           "-o" (str "cat >> " stream-file))]
         (if (zero? (:exit result))
@@ -114,11 +114,32 @@
   "List watched sessions"
   {:sessions (:sessions @watcher-state)})
 
+(defn discover-existing-sessions []
+  "Discover all existing qq- tmux sessions and auto-add them"
+  (try
+    (let [result (babashka.process/shell {:out :string :continue true} "tmux" "list-sessions" "-F" "#{session_name}")
+          sessions (when (zero? (:exit result))
+                    (->> (str/split-lines (:out result))
+                         (filter #(str/starts-with? % "qq-"))
+                         (map str/trim)))]
+      (println "🔍 Discovered" (count sessions) "existing Q sessions:" sessions)
+      (doseq [session sessions]
+        (println "📝 Auto-reconnecting to" session)
+        (add-session session))
+      sessions)
+    (catch Exception e
+      (println "⚠️ Could not discover existing sessions:" (.getMessage e))
+      [])))
+
 (defn start-watcher []
-  "Start watcher daemon with nREPL"
+  "Start watcher daemon with nREPL and auto-discover existing sessions"
   (println "🔍 Starting qq-watcher daemon with direct JSONL...")
   (nrepl/start-server! {:port 7888 :host "127.0.0.1"})
   (println "📡 nREPL server started on port 7888")
+  
+  ;; Auto-discover and reconnect to existing Q sessions
+  (discover-existing-sessions)
+  
   (println "🎯 Ready to watch sessions with direct JSONL logging")
   
   ;; Keep daemon alive
