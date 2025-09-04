@@ -33,8 +33,7 @@
 
 (defn log-question-direct [session-name question]
   "Log question directly to JSONL - self-contained"
-  (let [session-dir (str (System/getProperty "user.home") 
-                        "/.knock/qq/sessions/" session-name)
+  (let [session-dir (str "./log/" session-name)
         timeline-file (str session-dir "/timeline.jsonl")
         entry {:timestamp (str (java.time.Instant/now))
                :type "question" 
@@ -55,23 +54,29 @@
                            (while true
                              (try
                                (let [file (java.io.File. stream-file)]
-                                 (when (.exists file)
+                                 (if (.exists file)
                                    (let [current-size (.length file)]
+                                     (println "📊 Checking file" stream-file "- size:" current-size "last:" @last-size)
                                      (when (> current-size @last-size)
-                                       (println "📊 Direct watcher: file grew for" session-name "from" @last-size "to" current-size)
+                                       (println "📊 File grew! Processing" (- current-size @last-size) "new bytes")
                                        (let [new-content (with-open [raf (java.io.RandomAccessFile. stream-file "r")]
                                                            (.seek raf @last-size)
                                                            (let [buffer (byte-array (- current-size @last-size))]
                                                              (.read raf buffer)
                                                              (String. buffer "UTF-8")))]
+                                         (println "📝 New content:" (pr-str (subs new-content 0 (min 100 (count new-content)))))
                                          (let [questions (extract-human-questions new-content)]
+                                           (println "📝 Extracted" (count questions) "questions:" questions)
                                            (doseq [q questions]
                                              (when (and q (> (count q) 1))
+                                               (println "📝 Logging question:" q)
                                                (log-question-direct session-name q)))))
-                                       (reset! last-size current-size)))))
+                                       (reset! last-size current-size)))
+                                   (println "⚠️ Stream file does not exist:" stream-file)))
                                (Thread/sleep 500) ; Fast polling
                                (catch Exception e
-                                 (println "Direct watcher error for" session-name ":" (.getMessage e))
+                                 (println "❌ Watcher error for" session-name ":" (.getMessage e))
+                                 (.printStackTrace e)
                                  (Thread/sleep 2000))))))]
     (swap! watcher-state assoc-in [:watchers session-name] watcher-future)
     (println "✅ Direct JSONL watcher started for" session-name)))
