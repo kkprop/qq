@@ -47,7 +47,7 @@
 
 (defn start-direct-watcher [session-name]
   "Start direct JSONL watcher with simple polling"
-  (let [stream-file (str "/tmp/qq-stream-" session-name ".log")
+  (let [stream-file (str "./log/tmp/qq-stream-" session-name ".log")
         watcher-future (future
                          (let [last-size (atom 0)]
                            (println "🔄 Direct watcher loop starting for" session-name)
@@ -87,13 +87,15 @@
   (swap! watcher-state update :sessions conj session-name)
   ;; Start tmux pipe-pane for stream capture
   (try
-    (let [stream-file (str "/tmp/qq-stream-" session-name ".log")
-          result (babashka.process/shell {:continue true} 
-                                        "tmux" "pipe-pane" "-t" session-name 
-                                        "-o" (str "cat >> " stream-file))]
-      (if (zero? (:exit result))
-        (println "✅ Pipe-pane started for" session-name)
-        (println "❌ Failed to start pipe-pane:" (:err result))))
+    (let [stream-file (str "./log/tmp/qq-stream-" session-name ".log")]
+      ;; Ensure tmp directory exists
+      (io/make-parents stream-file)
+      (let [result (babashka.process/shell {:continue true} 
+                                          "tmux" "pipe-pane" "-t" session-name 
+                                          "-o" (str "cat >> " stream-file))]
+        (if (zero? (:exit result))
+          (println "✅ Pipe-pane started for" session-name)
+          (println "❌ Failed to start pipe-pane:" (:err result)))))
     (catch Exception e
       (println "❌ Error starting pipe-pane:" (.getMessage e))))
   ;; Start direct watcher
