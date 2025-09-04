@@ -79,7 +79,7 @@
                     (Thread/sleep 2000)))
               (catch Exception e
                 (println "❌ Outer error:" (.getMessage e))
-                (.printStackTrace e))))]
+                (.printStackTrace e)))]
     (swap! watcher-state assoc-in [:watchers session-name] watcher-future)
     (println "✅ Direct JSONL watcher started for" session-name)))
 
