@@ -102,8 +102,8 @@
 (defn start-watcher []
   "Start watcher daemon with nREPL"
   (println "🔍 Starting qq-watcher daemon with direct JSONL...")
-  (nrepl/start-server! {:port 7888 :host "127.0.0.1"})
-  (println "📡 nREPL server started on port 7888")
+  (nrepl/start-server! {:port 7889 :host "127.0.0.1"})
+  (println "📡 nREPL server started on port 7889")
   (println "🎯 Ready to watch sessions with direct JSONL logging")
   
   ;; Keep daemon alive

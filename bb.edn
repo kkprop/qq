@@ -32,7 +32,7 @@
                        (if session-name
                          (do
                            (println "📝 Adding session" session-name "to watcher")
-                           (let [result (nrepl/eval-expr {:host "127.0.0.1" :port 7888 
+                           (let [result (nrepl/eval-expr {:host "127.0.0.1" :port 7889 
                                                          :expr (str "(qq.watcher/add-session \"" session-name "\")")})]
                              (println "Response:" (:vals result))))
                          (println "Usage: bb watcher-add <session-name>")))}
