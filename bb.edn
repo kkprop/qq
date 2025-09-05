@@ -12,6 +12,8 @@
              [qq.context-monitor :as context-monitor]
              [qq.command-wrapper :as cmd]
              [qq.roam.client :as roam-client]
+             [qq.monkeyq.pending-viewer :as pending-viewer]
+             [qq.monkeyq.checkpoints :as checkpoints]
              [qq.web.server :as web]
              [qq.browser.control :as browser]
              [qq.session.manager :as session-mgr]
@@ -107,6 +109,18 @@
   
   track-monkeyq {:doc "Track changes to MonkeyQ page"
                  :task (shell "bb -e" "(require '[qq.roam.client :as client]) (client/track-page-changes :yuanvv \"MonkeyQ\" 5000 (fn [page hash] (println \"MonkeyQ page changed:\" hash)))")}
+  
+  show-responses {:doc "Show VV responses with professional TUI selection"
+                  :task (shell "bb -e" "(load-file \"src/qq/monkeyq/response_viewer.clj\") (qq.monkeyq.response-viewer/show-responses-tui)")}
+  
+  show-pending-vv {:doc "Show pending VV feedback that needs responses"
+                   :task (pending-viewer/show-pending-vv-feedback)}
+  
+  list-checkpoints {:doc "List all saved MonkeyQ checkpoints"
+                    :task (checkpoints/list-checkpoints)}
+  
+  checkpoint {:doc "Create checkpoint with fuzzy time input (e.g., 'yesterday 18:00' 'today 10:00')"
+              :task (apply checkpoints/create-checkpoint-cli *command-line-args*)}
   
   draft-monkeyq {:doc "Add draft response to MonkeyQ bin (yuanvv graph)"
                  :task (if-let [response (first *command-line-args*)]
