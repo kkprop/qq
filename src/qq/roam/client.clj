@@ -190,39 +190,79 @@
     @chunks))
 
 (defn parse-hierarchical-chunks [markdown-text]
-  "Parse markdown into H1 root with H2 children containing H3+ content"
+  "Parse markdown into H1 root with H2 children containing H3+ content, or handle TODO block as H1"
   (let [lines (str/split-lines markdown-text)
         h1-title (atom nil)
         h2-chunks (atom [])
         current-h2 (atom nil)
-        current-content (atom [])]
+        current-content (atom [])
+        has-h1? (some #(str/starts-with? % "# ") lines)
+        has-todo? (some #(str/starts-with? % "{{[[TODO]]}}") lines)]
     
-    (doseq [line lines]
-      (cond
-        ;; H1 header - capture as root title
-        (str/starts-with? line "# ")
-        (reset! h1-title line)
+    (cond
+      ;; Handle TODO block as H1, ### as H2
+      has-todo?
+      (do
+        (doseq [line lines]
+          (cond
+            ;; TODO block as H1 header
+            (str/starts-with? line "{{[[TODO]]}}")
+            (reset! h1-title line)
+            
+            ;; ### header as H2 - start new child block
+            (str/starts-with? line "### ")
+            (do
+              ;; Save previous H2 block if exists
+              (when @current-h2
+                (swap! h2-chunks conj {:h2 @current-h2 :content (str/trim (str/join "\n" @current-content))}))
+              ;; Start new H2
+              (reset! current-h2 line)
+              (reset! current-content []))
+            
+            ;; #### headers or content - add to current H2 (skip empty lines)
+            :else
+            (when (and @current-h2 (not (str/blank? line)))
+              (swap! current-content conj line))))
         
-        ;; H2 header - start new child block
-        (str/starts-with? line "## ")
-        (do
-          ;; Save previous H2 block if exists
-          (when @current-h2
-            (swap! h2-chunks conj {:h2 @current-h2 :content (str/join "\n" @current-content)}))
-          ;; Start new H2
-          (reset! current-h2 line)
-          (reset! current-content []))
+        ;; Add final H2 chunk
+        (when @current-h2
+          (swap! h2-chunks conj {:h2 @current-h2 :content (str/trim (str/join "\n" @current-content))}))
         
-        ;; H3+ headers or content - add to current H2
-        :else
-        (when @current-h2  ; Only add if we have an H2 context
-          (swap! current-content conj line))))
-    
-    ;; Add final H2 chunk
-    (when @current-h2
-      (swap! h2-chunks conj {:h2 @current-h2 :content (str/join "\n" @current-content)}))
-    
-    {:h1 @h1-title :h2-blocks @h2-chunks}))
+        {:h1 @h1-title :h2-blocks @h2-chunks})
+      
+      ;; Original H1 → H2 → H3+ parsing
+      has-h1?
+      (do
+        (doseq [line lines]
+          (cond
+            ;; H1 header - capture as root title
+            (str/starts-with? line "# ")
+            (reset! h1-title line)
+            
+            ;; H2 header - start new child block
+            (str/starts-with? line "## ")
+            (do
+              ;; Save previous H2 block if exists
+              (when @current-h2
+                (swap! h2-chunks conj {:h2 @current-h2 :content (str/trim (str/join "\n" @current-content))}))
+              ;; Start new H2
+              (reset! current-h2 line)
+              (reset! current-content []))
+            
+            ;; H3+ headers or content - add to current H2 (skip empty lines)
+            :else
+            (when (and @current-h2 (not (str/blank? line)))
+              (swap! current-content conj line))))
+        
+        ;; Add final H2 chunk
+        (when @current-h2
+          (swap! h2-chunks conj {:h2 @current-h2 :content (str/trim (str/join "\n" @current-content))}))
+        
+        {:h1 @h1-title :h2-blocks @h2-chunks})
+      
+      ;; Fallback: treat entire content as single block
+      :else
+      {:h1 nil :h2-blocks [{:h2 nil :content (str/trim markdown-text)}]})))
 
 (defn find-block-by-content [graph-key content]
   "Find block UID by matching exact content"
@@ -233,44 +273,56 @@
       (-> result :result first first))))  ; Get first UID from results
 
 (defn write-hierarchical-blocks [graph-key markdown-text]
-  "Write H1 as root parent, H2 as children, H3+ content as grandchildren"
+  "Write H1 as root parent, H2 as children, H3+ content as grandchildren, or TODO block with hierarchy"
   (let [parsed (parse-hierarchical-chunks markdown-text)
         h1-title (:h1 parsed)
         h2-blocks (:h2-blocks parsed)
         h2-count (count h2-blocks)]
     
-    (println "📝 Writing H1 root with" h2-count "H2 children to" (name graph-key))
-    
-    ;; Write H1 as root parent and capture UID
-    (println "📋 Writing H1 root parent...")
-    (let [h1-result (write-with-uid-capture graph-key h1-title)]
-      (if (:success h1-result)
-        (do
-          (println "✅ H1 root posted, UID:" (:uid h1-result))
-          
-          ;; Write each H2 as child of H1
-          (doseq [[i h2-block] (map-indexed vector h2-blocks)]
-            (println "📋 Writing H2 child" (inc i) "/" h2-count "...")
-            
-            ;; Write H2 as child of H1
-            (let [h2-result (roam-write-to-parent graph-key (:uid h1-result) (:h2 h2-block))]
-              (if (:success h2-result)
-                (do
-                  (println "✅ H2 child posted")
-                  
-                  ;; Find the H2 UID by matching its exact content
-                  (when (not (str/blank? (:content h2-block)))
-                    (println "📋 Finding H2 UID by content match...")
-                    (Thread/sleep 1000) ; Wait for indexing
-                    (let [h2-uid (find-block-by-content graph-key (:h2 h2-block))]
-                      (if h2-uid
-                        (let [content-result (roam-write-to-parent graph-key h2-uid (:content h2-block))]
-                          (if (:success content-result)
-                            (println "✅ H3+ content posted under H2, UID:" h2-uid)
-                            (println "❌ H3+ content failed")))
-                        (println "❌ Could not find H2 UID by content")))))
-                (println "❌ H2 child failed")))))
-        (println "❌ H1 root failed")))))
+    ;; Handle content without proper structure - post as single block
+    (if (and (nil? h1-title) (= h2-count 1) (nil? (:h2 (first h2-blocks))))
+      (let [content (:content (first h2-blocks))]
+        (println "📝 Writing single block to" (name graph-key))
+        (let [result (roam-write graph-key content)]
+          (if (:success result)
+            (println "✅ Single block posted")
+            (println "❌ Single block failed"))
+          result))
+      
+      ;; Handle hierarchical content (H1 or TODO as root)
+      (do
+        (println "📝 Writing root with" h2-count "children to" (name graph-key))
+        
+        ;; Write root (H1 or TODO) and capture UID
+        (println "📋 Writing root parent...")
+        (let [h1-result (write-with-uid-capture graph-key h1-title)]
+          (if (:success h1-result)
+            (do
+              (println "✅ Root posted, UID:" (:uid h1-result))
+              
+              ;; Write each H2/### as child of root
+              (doseq [[i h2-block] (map-indexed vector h2-blocks)]
+                (println "📋 Writing child" (inc i) "/" h2-count "...")
+                
+                ;; Write H2/### as child of root
+                (let [h2-result (roam-write-to-parent graph-key (:uid h1-result) (:h2 h2-block))]
+                  (if (:success h2-result)
+                    (do
+                      (println "✅ Child posted")
+                      
+                      ;; Find the child UID by matching its exact content
+                      (when (not (str/blank? (:content h2-block)))
+                        (println "📋 Finding child UID by content match...")
+                        (Thread/sleep 1000) ; Wait for indexing
+                        (let [h2-uid (find-block-by-content graph-key (:h2 h2-block))]
+                          (if h2-uid
+                            (let [content-result (roam-write-to-parent graph-key h2-uid (:content h2-block))]
+                              (if (:success content-result)
+                                (println "✅ Content posted under child, UID:" h2-uid)
+                                (println "❌ Content failed")))
+                            (println "❌ Could not find child UID by content")))))
+                    (println "❌ Child failed")))))
+            (println "❌ Root failed")))))))
 
 (defn add-draft-to-bin [response-text graph-key]
   "Add draft response to bin file for specific graph - auto-detects file paths"
