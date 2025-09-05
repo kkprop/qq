@@ -17,7 +17,57 @@ AWS Lambda Optimization                    ← Topic Block (Layer 0)
     └── Related: [[Serverless Architecture]]  ← Link (Layer 2)
 ```
 
-### **Daily Notes Integration**
+## 🎯 **Advanced Hierarchy Tips**
+
+### **🔧 Beyond API Limitations: Manual Enhancement Workflow**
+
+**The Problem**: Roam API limits us to 3 levels (H1 → H2 → content block)
+
+**The Solution**: Leverage Roam's native markdown parsing power!
+
+#### **Step-by-Step Enhancement:**
+1. **Automated Foundation**: Use `bb post-lisp` to create H1 → H2 → content structure
+2. **Manual Refinement**: 
+   - In Roam, **cut** the crowded H3+ content block
+   - **Paste** it back in the same location
+   - **Magic!** Roam automatically parses markdown into full hierarchy
+
+#### **Result: Unlimited Hierarchy Levels**
+```
+- # 🌟 LISP Evangelism: The Path to Computational Enlightenment
+  - ## 🚀 Why LISP? Why Now?
+    - ### 💡 The Maria.cloud Gateway          ← H3 (auto-parsed)
+      - **Zero setup barrier**                ← H4 content
+      - **Interactive learning**              ← H4 content
+    - ### 🧠 LISP: The Language of Thought    ← H3 (auto-parsed)
+      - #### 🔧 Core Revelations:             ← H4 (auto-parsed)
+        - 1. **Code as Data**                 ← H5 lists
+        - 2. **Homoiconicity**               ← H5 lists
+```
+
+### **🎯 Reading & Navigation Tips**
+
+#### **Folding/Unfolding Strategy**
+- **Start collapsed**: Fold all blocks to see the big picture
+- **Progressive expansion**: Unfold one section at a time
+- **Focus reading**: Fold completed sections, keep current section open
+- **Structural navigation**: Use folding to understand content hierarchy
+
+#### **Benefits of This Approach**
+- ✅ **Cognitive clarity**: Folding helps grasp the overall structure
+- ✅ **Focused reading**: Unfold only what you're currently reading
+- ✅ **Content comprehension**: See how ideas build upon each other
+- ✅ **Unlimited depth**: No API restrictions on hierarchy levels
+
+### **🚀 Best Practices**
+1. **Use our automation** for the foundation structure
+2. **Manual enhancement** for complex hierarchies
+3. **Fold/unfold navigation** for better comprehension
+4. **Progressive reading** - expand sections as you go
+
+**This hybrid approach combines automation efficiency with Roam's native power!**
+
+---
 - Each Q session creates blocks under today's daily note
 - Natural time-based organization with bidirectional links
 - Auto-extracted `[[entities]]` for topic connections
