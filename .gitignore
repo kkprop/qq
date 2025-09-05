@@ -4,6 +4,9 @@ commit.sh
 # QQ data directory (user's session data)
 .knock/
 
+# Evangelism documents (private)
+evangelism/
+
 # Babashka/Clojure
 .cpcache/
 .nrepl-port

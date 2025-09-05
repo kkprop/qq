@@ -125,6 +125,19 @@
     
     app))
 
+(defn confirm
+  "Simple Y/N confirmation prompt - returns true for Y/y, false for N/n"
+  ([prompt] (confirm prompt true))
+  ([prompt default]
+   (print (str prompt " " (if default "(Y/n)" "(y/N)") ": "))
+   (flush)
+   (let [input (str/trim (read-line))]
+     (cond
+       (str/blank? input) default
+       (= (str/lower-case input) "y") true
+       (= (str/lower-case input) "n") false
+       :else (recur prompt default)))))
+
 (defn start-filter-app [app]
   "Enhanced app with filtering support"
   (let [{:keys [state render running]} app]

@@ -11,6 +11,7 @@
              [qq.monitor :as monitor]
              [qq.context-monitor :as context-monitor]
              [qq.command-wrapper :as cmd]
+             [qq.roam.client :as roam-client]
              [qq.web.server :as web]
              [qq.browser.control :as browser]
              [qq.session.manager :as session-mgr]
@@ -104,6 +105,38 @@
   roam-test {:doc "Test Roam Research integration with sample data"
              :task (shell "bb -e" "(require '[qq.roam.test :as test]) (test/test-roam-write)")}
   
+  track-monkeyq {:doc "Track changes to MonkeyQ page"
+                 :task (shell "bb -e" "(require '[qq.roam.client :as client]) (client/track-page-changes :yuanvv \"MonkeyQ\" 5000 (fn [page hash] (println \"MonkeyQ page changed:\" hash)))")}
+  
+  draft-monkeyq {:doc "Add draft response to MonkeyQ bin (yuanvv graph)"
+                 :task (if-let [response (first *command-line-args*)]
+                         (roam-client/add-draft-to-bin response :yuanvv)
+                         (println "Usage: bb draft-monkeyq \"Your draft response\""))}
+
+  draft-lisp {:doc "Add draft response to LISP evangelism bin (lisp graph)"
+              :task (if-let [response (first *command-line-args*)]
+                      (roam-client/add-draft-to-bin response :lisp)
+                      (println "Usage: bb draft-lisp \"Your draft response\""))}
+  
+  post-monkeyq {:doc "Post all MonkeyQ drafts and notify via #DcQ"
+                :task (roam-client/post-all-drafts :yuanvv)}
+
+  post-lisp {:doc "Post all LISP evangelism drafts"
+             :task (roam-client/post-all-drafts :lisp)}
+  
+  daily-yuanvv {:doc "Show #MonkeyQ content in yuanvv graph"
+                :task (core/show-pages :yuanvv "MonkeyQ")}
+
+  daily-lisp {:doc "Show today's daily note in lisp graph"
+              :task (let [today (.format (java.time.LocalDate/now) 
+                                        (java.time.format.DateTimeFormatter/ofPattern "MMMM d'th', yyyy" java.util.Locale/ENGLISH))]
+                      (core/show-pages :lisp today))}
+
+  daily {:doc "Show #MonkeyQ content (yuanvv graph)"
+         :task (core/show-pages :yuanvv "MonkeyQ")}
+
+  check-notifications {:doc "Check #DcQ notifications from posting"
+                       :task (core/show-pages :yuanvv "DcQ")}
   show-pages {:doc "Show layers from specific page: bb show-pages :graph \"Page Title\""
               :task (apply core/show-pages *command-line-args*)}
   ;; Monitoring tasks
