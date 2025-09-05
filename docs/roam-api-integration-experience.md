@@ -1,23 +1,39 @@
 # 🎯 Roam API Integration Experience Summary
 
-*Complete journey from zero to production-ready Roam Research integration with layered Q&A blocks*
+*Complete journey from zero to production-ready Roam Research integration with hierarchical block creation*
 
 ## 🚀 What We Achieved
 
 ### **Core Features Implemented**
 - ✅ **Complete Roam Research integration** with authentication and multi-graph support
-- ✅ **Layered Q&A block creation** - 4-level hierarchy: Topic → Question → Answer → Entity Links
+- ✅ **3-level hierarchical blocks** - H1 → H2 → H3+ content structure
+- ✅ **UID capture system** - Timestamp + content matching for parent-child relationships
 - ✅ **Bidirectional page reading** - content ON pages AND blocks that reference pages
 - ✅ **Human-readable API** with `bb show-pages lisp "Q&A"` command
 - ✅ **Real entity linking** with `[[keyword]]` bidirectional connections
 - ✅ **Production-ready error handling** and validation
+- ✅ **Smart rate limiting** - Optimized for 50 req/min API limits
 
 ### **Technical Architecture**
 ```
-Authentication → API Client → Block Management → Content Display
-     ↓              ↓              ↓                ↓
-Multi-graph     HTTP requests   Hierarchical    Human-readable
-config          with tokens     Q&A creation    formatting
+Authentication → API Client → Hierarchical Parser → UID Capture → Block Creation
+     ↓              ↓              ↓                ↓              ↓
+Multi-graph     HTTP requests   H1/H2/H3+       Content        Parent-child
+config          with tokens     structure       matching       relationships
+```
+
+### **Latest Implementation (2025-09-05)**
+```
+# 🌟 LISP Evangelism: The Path to Computational Enlightenment    ← H1 Root
+├── ## 🚀 Why LISP? Why Now?                                    ← H2 Child
+│   └── ### 💡 The Maria.cloud Gateway                          ← H3+ Content
+│       - Zero setup barrier
+│       - Interactive learning...
+└── ## 🎉 Your LISP Journey Starts Here                        ← H2 Child
+    └── ### 🌐 Immediate Action:                                ← H3+ Content
+        1. Visit maria.cloud
+        2. Try the examples...
+```
 ```
 
 ## 🕳️ Major Pitfalls & Solutions
